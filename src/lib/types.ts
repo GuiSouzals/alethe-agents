@@ -1,5 +1,13 @@
 export type AgentType =
-  'shell' | 'claude' | 'codex' | 'opencode' | 'freebuff' | 'mimo' | 'antigravity'
+  | 'shell'
+  | 'claude'
+  | 'codex'
+  | 'opencode'
+  | 'freebuff'
+  | 'mimo'
+  | 'antigravity'
+  // Lord F1: Cursor CLI de primeira classe (binário real: cursor-agent / agent).
+  | 'cursor'
 
 /** Rótulo de exibição de cada agente — fonte única, evita listas paralelas
  * divergentes por componente (ex.: "Claude" vs "Claude Code" pro mesmo tipo). */
@@ -7,6 +15,8 @@ export const AGENT_TYPE_LABELS: Record<AgentType, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
   antigravity: 'Antigravity',
+  // Lord F1:
+  cursor: 'Cursor',
   opencode: 'OpenCode',
   mimo: 'Mimo',
   freebuff: 'Freebuff',
@@ -20,6 +30,8 @@ export const ALL_AGENT_TYPES: AgentType[] = [
   'claude',
   'codex',
   'antigravity',
+  // Lord F1:
+  'cursor',
   'opencode',
   'mimo',
   'freebuff',
@@ -27,10 +39,14 @@ export const ALL_AGENT_TYPES: AgentType[] = [
 ]
 
 /** Executável real de cada agente. O Antigravity desktop usa `antigravity`,
- * enquanto o agente de terminal oficial usa `agy`. */
+ * enquanto o agente de terminal oficial usa `agy`. Cursor: `cursor-agent`
+ * (alias oficial `agent` é resolvido no backend). */
 export function agentCliCommand(agent: AgentType): string | undefined {
   if (agent === 'shell') return undefined
-  return agent === 'antigravity' ? 'agy' : agent
+  if (agent === 'antigravity') return 'agy'
+  // Lord F1: o tipo de domínio é `cursor`; o binário instalado é `cursor-agent`.
+  if (agent === 'cursor') return 'cursor-agent'
+  return agent
 }
 
 /** Idiomas suportados pela UI. `en` é o default. */
@@ -123,6 +139,9 @@ export const UNRESTRICTED_FLAG: Record<AgentType, string | null> = {
   freebuff: null,
   mimo: null,
   antigravity: '--dangerously-skip-permissions',
+  // Lord F1: CLI tem --force/--yolo e --sandbox, mas equivalência 1:1 ao
+  // "irrestrito" dos outros providers não está confirmada — não injeta default.
+  cursor: null,
 }
 
 /**
@@ -378,6 +397,8 @@ export type Preferences = {
   topbarShowClaudeUsage: boolean
   topbarShowCodexUsage: boolean
   topbarShowAntigravityUsage: boolean
+  /** Lord F1: mostra pill "CLI conectado · consumo no dashboard" (sem %). */
+  topbarShowCursorStatus: boolean
   topbarShowSync: boolean
   topbarShowProfile: boolean
   topbarShowMemory: boolean
@@ -481,6 +502,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
     claude: true,
     codex: true,
     antigravity: true,
+    // Lord F1:
+    cursor: true,
     opencode: true,
     freebuff: true,
     mimo: true,
@@ -503,6 +526,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   topbarShowClaudeUsage: true,
   topbarShowCodexUsage: true,
   topbarShowAntigravityUsage: true,
+  // Lord F1: pill de disponibilidade (sem medidor de consumo).
+  topbarShowCursorStatus: true,
   topbarShowSync: true,
   topbarShowProfile: true,
   topbarShowMemory: true,
@@ -592,6 +617,12 @@ export const PROVIDER_MODELS: Record<AgentType, { id: string; label: string }[]>
     { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Padrão)' },
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
     { id: 'claude-3.7-sonnet', label: 'Claude 3.7 Sonnet' },
+  ],
+  // Lord F1: catálogo estático de fallback; o CLI consulta --list-models em runtime.
+  cursor: [
+    { id: 'auto', label: 'Auto (default)' },
+    { id: 'gpt-5.2', label: 'GPT-5.2' },
+    { id: 'sonnet-4-thinking', label: 'Sonnet 4 Thinking' },
   ],
   mimo: [
     { id: 'mimo-pro', label: 'Mimo Pro' },

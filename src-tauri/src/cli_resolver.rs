@@ -148,12 +148,26 @@ pub async fn find_cli_launcher(agent: String) -> Option<String> {
 pub fn find_windows_cli_launcher(command: &str) -> Option<PathBuf> {
     #[cfg(not(windows))]
     {
-        if let Ok(path) = which::which(command) {
-            return Some(path);
+        let names = cli_command_aliases(command);
+        for name in &names {
+            if let Ok(path) = which::which(name) {
+                return Some(path);
+            }
         }
         if let Some(home) = env::var_os("HOME").map(PathBuf::from) {
             for dir in [home.join(".local").join("bin"), home.join(".cargo").join("bin")] {
-                let candidate = dir.join(command);
+                for name in &names {
+                    let candidate = dir.join(name);
+                    if candidate.is_file() {
+                        return Some(candidate);
+                    }
+                }
+            }
+            // Lord F1: instalação Windows-style do cursor-agent também pode
+            // aparecer sob XDG paths em WSL; o dir local do install script.
+            let cursor_dir = home.join(".local").join("share").join("cursor-agent");
+            for name in &names {
+                let candidate = cursor_dir.join(name);
                 if candidate.is_file() {
                     return Some(candidate);
                 }
@@ -170,23 +184,69 @@ pub fn find_windows_cli_launcher(command: &str) -> Option<PathBuf> {
 
         // `antigravity` é o desktop Electron; o agente de terminal oficial é
         // exclusivamente `agy`. Nunca use o desktop como fallback para o CLI.
-        let candidates_to_try = match command {
-            "antigravity" | "agy" => vec!["agy"],
-            other => vec![other],
-        };
+        // Lord F1: `cursor` / `cursor-agent` / `agent` são aliases do mesmo CLI.
+        let candidates_to_try = cli_command_aliases(command);
 
         for cmd_name in candidates_to_try {
             for dir in &dirs {
                 for extension in ["cmd", "exe", "bat", "ps1"] {
                     let candidate = dir.join(format!("{cmd_name}.{extension}"));
                     if candidate.is_file() {
-                        return Some(candidate);
+                        // Lord F1: já vem com extensão; promote é no-op.
+                        return Some(promote_windows_executable_path(candidate));
                     }
+                }
+                // Shim sem extensão (nvm/npm): promove pro irmão .cmd antes
+                // de devolver — spawn direto do arquivo sem extensão = ENOENT.
+                let bare = dir.join(cmd_name);
+                if bare.is_file() {
+                    return Some(promote_windows_executable_path(bare));
                 }
             }
         }
         None
     }
+}
+
+/// Lord F1: aliases oficiais do mesmo CLI. `cursor` (tipo de domínio) e
+/// `agent` (nome na doc oficial) resolvem para o binário `cursor-agent`.
+fn cli_command_aliases(command: &str) -> Vec<&str> {
+    match command {
+        "antigravity" | "agy" => vec!["agy"],
+        "cursor" | "cursor-agent" | "agent" => vec!["cursor-agent", "agent"],
+        other => vec![other],
+    }
+}
+
+/// Lord F1: no Windows, shims sem extensão (ex.: `C:\nvm4w\nodejs\codex`,
+/// `%LOCALAPPDATA%\cursor-agent\cursor-agent`) falham com ENOENT no spawn.
+/// Promove para o irmão `.cmd`/`.exe`/`.bat`/`.ps1` quando existir — regra
+/// genérica, não caso a caso por agente.
+#[cfg(windows)]
+pub fn promote_windows_executable_path(path: PathBuf) -> PathBuf {
+    const EXTS: &[&str] = &["cmd", "exe", "bat", "ps1"];
+    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        return path;
+    };
+    let lower = name.to_ascii_lowercase();
+    if EXTS.iter().any(|ext| lower.ends_with(&format!(".{ext}"))) {
+        return path;
+    }
+    let Some(parent) = path.parent() else {
+        return path;
+    };
+    for ext in EXTS {
+        let candidate = parent.join(format!("{name}.{ext}"));
+        if candidate.is_file() {
+            return candidate;
+        }
+    }
+    path
+}
+
+#[cfg(not(windows))]
+pub fn promote_windows_executable_path(path: PathBuf) -> PathBuf {
+    path
 }
 
 /// Procura o launcher do VS Code (code) em localizações comuns + PATH.
@@ -256,6 +316,13 @@ pub fn agent_search_dirs() -> Vec<PathBuf> {
         dirs.push(profile.join("scoop").join("shims"));
         dirs.push(profile.join("AppData").join("Local").join("agy").join("bin"));
         dirs.push(profile.join("AppData").join("Local").join("antigravity").join("bin"));
+        // Lord F1: instalação padrão do Cursor Agent no Windows.
+        dirs.push(profile.join("AppData").join("Local").join("cursor-agent"));
+    }
+    if let Some(local) = env::var_os("LOCALAPPDATA").map(PathBuf::from) {
+        // Lord F1: cobre o caso em que USERPROFILE ≠ LOCALAPPDATA.
+        dirs.push(local.join("cursor-agent"));
+        dirs.push(local.join("agy").join("bin"));
     }
     if let Some(app_data) = env::var_os("APPDATA").map(PathBuf::from) {
         dirs.push(app_data.join("npm"));
@@ -480,6 +547,16 @@ pub struct ModelOption {
     pub label: String,
 }
 
+/// Lord F1: disponibilidade do Cursor CLI — sem %, tokens ou custo.
+/// `status`: `ready` | `no_cli` | `no_auth` | `unavailable`.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct CursorCliStatus {
+    pub status: String,
+    pub cli_path: String,
+    pub authenticated: bool,
+    pub email: Option<String>,
+}
+
 fn is_valid_model_id(id: &str) -> bool {
     let id_lower = id.to_lowercase();
     if id.is_empty()
@@ -506,6 +583,8 @@ fn discover_provider_models_inner(provider: String) -> Result<Vec<ModelOption>, 
 
     let cmd_name = match provider_lower.as_str() {
         "antigravity" | "agy" => "agy",
+        // Lord F1:
+        "cursor" | "cursor-agent" | "agent" => "cursor-agent",
         other => other,
     };
 
@@ -648,10 +727,60 @@ fn discover_provider_models_inner(provider: String) -> Result<Vec<ModelOption>, 
                 models.push(ModelOption { id: "freebuff-fast".into(), label: "Freebuff Fast".into() });
             }
         }
+        // Lord F1: --list-models (e `models`) do Cursor Agent. Falha aqui não
+        // bloqueia o launch interativo básico — só devolve lista vazia/fallback.
+        "cursor" | "cursor-agent" | "agent" => {
+            let mut ran = false;
+            for flag in ["--list-models", "models"] {
+                if let Ok(output) = std::process::Command::new(&bin_path).arg(flag).output() {
+                    ran = true;
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    for line in stdout.lines() {
+                        if let Some((id, label)) = parse_cursor_model_line(line) {
+                            if is_valid_model_id(&id) {
+                                models.push(ModelOption {
+                                    label: format!("{label} (Cursor CLI)"),
+                                    id,
+                                });
+                            }
+                        }
+                    }
+                    if !models.is_empty() {
+                        break;
+                    }
+                }
+                if flag == "--list-models" && ran && !models.is_empty() {
+                    break;
+                }
+            }
+            if models.is_empty() {
+                models.push(ModelOption {
+                    id: "auto".into(),
+                    label: "Auto (Cursor default)".into(),
+                });
+            }
+        }
         _ => {}
     }
 
     Ok(models)
+}
+
+/// Lord F1: linhas do tipo `gpt-5.2 - GPT-5.2` ou só o id.
+fn parse_cursor_model_line(line: &str) -> Option<(String, String)> {
+    let trimmed = line.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("available models") {
+        return None;
+    }
+    if let Some((id, label)) = trimmed.split_once(" - ") {
+        let id = id.trim().to_string();
+        let label = label.trim().to_string();
+        if !id.is_empty() {
+            return Some((id, if label.is_empty() { id.clone() } else { label }));
+        }
+    }
+    let id = trimmed.split_whitespace().next()?.to_string();
+    Some((id.clone(), id))
 }
 
 /// `discover_provider_models_inner` roda `std::process::Command::output()`
@@ -663,6 +792,100 @@ pub async fn discover_provider_models(provider: String) -> Result<Vec<ModelOptio
     tokio::task::spawn_blocking(move || discover_provider_models_inner(provider))
         .await
         .map_err(|error| format!("discover_provider_models: falha na task bloqueante: {error}"))?
+}
+
+/// Lord F1: status honesto do Cursor CLI via `status --format json` documentado.
+/// Nunca devolve percentual, franquia ou custo — isso vive no dashboard web.
+///
+/// TODO(Lord F1): registrar `get_cursor_cli_status` em `src-tauri/src/lib.rs`
+/// (`generate_handler!`) — este arquivo está bloqueado porque outro agente
+/// corrige o protocolo `/spawn` em paralelo. Até lá o frontend degrada para
+/// `find_cli_launcher` (instalado/ausente, sem auth).
+#[tauri::command]
+pub async fn get_cursor_cli_status() -> CursorCliStatus {
+    tokio::task::spawn_blocking(get_cursor_cli_status_inner)
+        .await
+        .unwrap_or_else(|_| CursorCliStatus {
+            status: "unavailable".into(),
+            cli_path: String::new(),
+            authenticated: false,
+            email: None,
+        })
+}
+
+fn get_cursor_cli_status_inner() -> CursorCliStatus {
+    let Some(launcher) = find_windows_cli_launcher("cursor-agent")
+        .or_else(|| find_windows_cli_launcher("agent"))
+    else {
+        return CursorCliStatus {
+            status: "no_cli".into(),
+            cli_path: String::new(),
+            authenticated: false,
+            email: None,
+        };
+    };
+    let cli_path = launcher.to_string_lossy().to_string();
+    let output = std::process::Command::new(&launcher)
+        .args(["status", "--format", "json"])
+        .output();
+    match output {
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            match parse_cursor_auth_status(&stdout) {
+                Some((true, email)) => CursorCliStatus {
+                    status: "ready".into(),
+                    cli_path,
+                    authenticated: true,
+                    email,
+                },
+                Some((false, email)) => CursorCliStatus {
+                    status: "no_auth".into(),
+                    cli_path,
+                    authenticated: false,
+                    email,
+                },
+                None => {
+                    // CLI presente mas saída não parseável — não inventa auth.
+                    CursorCliStatus {
+                        status: "unavailable".into(),
+                        cli_path,
+                        authenticated: false,
+                        email: None,
+                    }
+                }
+            }
+        }
+        Err(_) => CursorCliStatus {
+            status: "unavailable".into(),
+            cli_path,
+            authenticated: false,
+            email: None,
+        },
+    }
+}
+
+/// Lord F1: parseia só autenticação do JSON oficial de `agent status --format json`.
+/// Ignora qualquer campo que pareça uso/custo/porcentagem.
+pub fn parse_cursor_auth_status(stdout: &str) -> Option<(bool, Option<String>)> {
+    let trimmed = stdout.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_str(trimmed).ok()?;
+    let authenticated = value
+        .get("isAuthenticated")
+        .and_then(|v| v.as_bool())
+        .or_else(|| {
+            value.get("status").and_then(|v| v.as_str()).map(|s| {
+                s.eq_ignore_ascii_case("authenticated") || s.eq_ignore_ascii_case("logged_in")
+            })
+        })?;
+    let email = value
+        .pointer("/userInfo/email")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .filter(|s| !s.is_empty());
+    Some((authenticated, email))
 }
 
 #[cfg(test)]
@@ -736,5 +959,113 @@ mod tests {
     fn resolves_cli_launcher_on_unix() {
         assert!(find_windows_cli_launcher("sh").is_some());
         assert!(find_windows_cli_launcher("non_existent_binary_xyz_123").is_none());
+    }
+
+    // Lord F1:
+    #[test]
+    fn parses_cursor_model_lines() {
+        assert_eq!(
+            parse_cursor_model_line("gpt-5.2 - GPT-5.2"),
+            Some(("gpt-5.2".into(), "GPT-5.2".into()))
+        );
+        assert_eq!(parse_cursor_model_line("Available models"), None);
+        assert_eq!(
+            parse_cursor_model_line("auto - Auto (default)"),
+            Some(("auto".into(), "Auto (default)".into()))
+        );
+    }
+
+    // Lord F1:
+    #[test]
+    fn parses_cursor_auth_status_fixtures() {
+        let ready = r#"{
+          "status": "authenticated",
+          "isAuthenticated": true,
+          "userInfo": { "email": "dev@example.com" }
+        }"#;
+        assert_eq!(
+            parse_cursor_auth_status(ready),
+            Some((true, Some("dev@example.com".into())))
+        );
+
+        let no_auth = r#"{ "status": "unauthenticated", "isAuthenticated": false }"#;
+        assert_eq!(parse_cursor_auth_status(no_auth), Some((false, None)));
+
+        assert_eq!(parse_cursor_auth_status(""), None);
+        assert_eq!(parse_cursor_auth_status("not-json"), None);
+    }
+
+    // Lord F1: fixture cursor-agent(.cmd/.ps1/.exe) — promove shim sem extensão.
+    #[cfg(windows)]
+    #[test]
+    fn promotes_extensionless_shim_to_cmd_sibling() {
+        let dir = std::env::temp_dir().join(format!(
+            "alethe-cursor-promote-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let bare = dir.join("cursor-agent");
+        let cmd = dir.join("cursor-agent.cmd");
+        std::fs::write(&bare, b"@echo off\n").expect("bare shim");
+        std::fs::write(&cmd, b"@echo off\n").expect("cmd shim");
+
+        let promoted = promote_windows_executable_path(bare);
+        assert_eq!(promoted, cmd);
+
+        let already = promote_windows_executable_path(dir.join("cursor-agent.ps1"));
+        // ps1 ainda não existe como arquivo "já extensado" no path de entrada —
+        // se o path de entrada já tem extensão conhecida, promote é no-op mesmo
+        // sem o arquivo existir (só devolve o path original).
+        assert_eq!(already, dir.join("cursor-agent.ps1"));
+
+        // Preferência .cmd quando vários irmãos existem.
+        std::fs::write(dir.join("cursor-agent.exe"), b"MZ").expect("exe");
+        let from_bare = promote_windows_executable_path(dir.join("cursor-agent"));
+        assert_eq!(from_bare.extension().and_then(|e| e.to_str()), Some("cmd"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // Lord F1:
+    #[cfg(windows)]
+    #[test]
+    fn resolves_cursor_agent_fixture_from_search_dir() {
+        let dir = std::env::temp_dir().join(format!(
+            "alethe-cursor-resolve-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        let cmd = dir.join("cursor-agent.cmd");
+        std::fs::write(&cmd, b"@echo off\n").expect("cmd");
+
+        // Injeta o dir de fixture no início do PATH reconstruído via env var
+        // já expandida — agent_search_dirs inclui LOCALAPPDATA\cursor-agent,
+        // então espelhamos o layout real.
+        let prev_local = std::env::var_os("LOCALAPPDATA");
+        std::env::set_var("LOCALAPPDATA", &dir);
+        // O resolver procura LOCALAPPDATA\cursor-agent\cursor-agent.cmd
+        let nested = dir.join("cursor-agent");
+        std::fs::create_dir_all(&nested).expect("nested");
+        let nested_cmd = nested.join("cursor-agent.cmd");
+        std::fs::write(&nested_cmd, b"@echo off\n").expect("nested cmd");
+
+        let found = find_windows_cli_launcher("cursor");
+        assert!(found.is_some(), "expected to resolve cursor-agent.cmd");
+        let found = found.unwrap();
+        assert!(
+            found
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.eq_ignore_ascii_case("cursor-agent.cmd")),
+            "got {found:?}"
+        );
+
+        match prev_local {
+            Some(v) => std::env::set_var("LOCALAPPDATA", v),
+            None => std::env::remove_var("LOCALAPPDATA"),
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

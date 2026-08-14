@@ -88,6 +88,8 @@ export const ptBR: Record<MessageKey, string> = {
   'agent.freebuff.desc': 'Agente grátis',
   'agent.mimo.desc': 'CLI da Xiaomi',
   'agent.antigravity.desc': 'Google Antigravity CLI',
+  // Lord F1:
+  'agent.cursor.desc': 'CLI do Cursor Agent',
 
   /* ---- image input ---- */
   'image.placeholder': 'https://exemplo.com/icone.png',
@@ -726,6 +728,25 @@ export const ptBR: Record<MessageKey, string> = {
   'widget.antigravityNotInstalled': 'CLI agy não instalado',
   'widget.antigravityNotSignedIn': 'sem login no agy',
   'widget.antigravityUsageHint': 'rode agy e faça login para ver as quotas ao vivo',
+  // Lord F1: disponibilidade do Cursor — nunca porcentagem.
+  'widget.cursorNotInstalled': 'CLI do Cursor não instalado',
+  'widget.cursorNotSignedIn': 'sem login no CLI do Cursor',
+  'widget.cursorInstallHint': 'instale o CLI do Cursor para abrir sessões neste workspace',
+  'widget.cursorSignInHint':
+    'rode agent login — o consumo fica no dashboard do Cursor, não aqui',
+  'widget.cursorCliConnected': 'CLI conectado · consumo no dashboard',
+  'widget.cursorCliFound': 'CLI do Cursor encontrado',
+  'widget.cursorUsageInDashboard':
+    'Abra o dashboard do Cursor para o número real de consumo — este card nunca inventa porcentagem',
+  'widget.cursorPillConnected': 'CLI · dashboard',
+  'widget.cursorOpenDashboard': 'Abrir dashboard',
+  'widget.cursorProcessLabel': 'processo',
+  'widget.cursorProcessRunning': 'rodando',
+  'widget.cursorProcessStopped': 'parado',
+  'widget.cursorStatusReady': 'CLI conectado',
+  'widget.cursorStatusNoAuth': 'sem login',
+  'widget.cursorStatusNoCli': 'não instalado',
+  'widget.cursorStatusUnknown': 'status desconhecido',
   'widget.usageUnavailable': 'uso indisponível',
   'widget.mostUsed': 'mais consumido',
   'widget.mostUsedBucket': 'mais consumido · {name}',
@@ -965,6 +986,10 @@ export const ptBR: Record<MessageKey, string> = {
   'ui.titlebar.itemClaude': 'Uso do Claude Code',
   'ui.titlebar.itemCodex': 'Uso do Codex',
   'ui.titlebar.itemAntigravity': 'Status do Antigravity',
+  // Lord F1:
+  'ui.titlebar.itemCursor': 'Status do CLI do Cursor',
+  'ui.titlebar.cursorStatusTooltip':
+    'CLI do Cursor · o consumo fica no dashboard (sem medidor local)',
   'ui.titlebar.itemSync': 'Sincronização na nuvem',
   'ui.titlebar.itemProfile': 'Perfil local',
   'ui.titlebar.itemMemory': 'Uso de memória',

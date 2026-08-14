@@ -46,6 +46,8 @@ const QUICK_AGENTS: Array<{ type: AgentType; label: string }> = [
   { type: 'claude', label: 'Claude' },
   { type: 'codex', label: 'Codex' },
   { type: 'antigravity', label: 'Antigravity' },
+  // Lord F1:
+  { type: 'cursor', label: 'Cursor' },
   { type: 'opencode', label: 'OpenCode' },
 ]
 
@@ -61,6 +63,8 @@ const NOTIF_AGENT_CLASS: Record<AgentType, string> = {
   claude: styles.notifClaude,
   codex: styles.notifCodex,
   antigravity: styles.notifAntigravity,
+  // Lord F1:
+  cursor: styles.notifCursor,
   shell: styles.notifShell,
   opencode: styles.notifOpencode,
   freebuff: styles.notifFreebuff,

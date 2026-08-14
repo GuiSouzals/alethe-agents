@@ -37,15 +37,9 @@ export function NewTerminalModal() {
   const [type, setType] = useState<AgentType>('claude')
   const [runtimeProfile, setRuntimeProfile] = useState<AgentRuntimeProfile>('lean')
   const [cwd, setCwd] = useState('')
-  const [unrestricted, setUnrestricted] = useState<Record<AgentType, boolean>>({
-    shell: false,
-    claude: false,
-    codex: false,
-    antigravity: false,
-    opencode: false,
-    freebuff: false,
-    mimo: false,
-  })
+  const [unrestricted, setUnrestricted] = useState<Record<AgentType, boolean>>(() =>
+    Object.fromEntries(ALL_AGENT_TYPES.map((agent) => [agent, false])) as Record<AgentType, boolean>,
+  )
 
   const visibleAgents = AGENTS.filter((a) => enabled[a.type])
   const defaultType =
@@ -78,15 +72,12 @@ export function NewTerminalModal() {
     if (!open) return
     setCwd(inheritedCwd)
     setType(defaultType)
-    setUnrestricted({
-      shell: alwaysStartUnrestricted,
-      claude: alwaysStartUnrestricted,
-      codex: alwaysStartUnrestricted,
-      antigravity: alwaysStartUnrestricted,
-      opencode: alwaysStartUnrestricted,
-      freebuff: alwaysStartUnrestricted,
-      mimo: alwaysStartUnrestricted,
-    })
+    // Lord F1: inclui cursor via ALL_AGENT_TYPES.
+    setUnrestricted(
+      Object.fromEntries(
+        ALL_AGENT_TYPES.map((agent) => [agent, alwaysStartUnrestricted]),
+      ) as Record<AgentType, boolean>,
+    )
   }, [open, context?.projectId, inheritedCwd, defaultType, alwaysStartUnrestricted])
 
   const reset = () => {
@@ -98,6 +89,7 @@ export function NewTerminalModal() {
       claude: false,
       codex: false,
       antigravity: false,
+      cursor: false,
       opencode: false,
       freebuff: false,
       mimo: false,

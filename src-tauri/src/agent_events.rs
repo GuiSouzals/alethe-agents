@@ -10,16 +10,60 @@ use std::io::Read;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter};
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, Emitter, Manager, State};
+
+use crate::spawn_state::{SpawnRegistry, SpawnResponseV1, SpawnStatus};
 
 const HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9123;
 const MAX_PORT: u16 = 9143;
 const BODY_LIMIT: u64 = 1024 * 1024; // 1 MB
+// Lord D1: Prazo curto para observar consumidor; trabalho já reivindicado continua como `received`.
+const SPAWN_CONSUMER_TIMEOUT: Duration = Duration::from_secs(2);
 // Lord B1: Keep the bridge contract discoverable inside the active profile.
 const DISCOVERY_FILE_NAME: &str = "lord-agent-listener.json";
 static LISTENER_PORT: AtomicU16 = AtomicU16::new(0);
 static LISTENER_TOKEN: OnceLock<String> = OnceLock::new();
+
+// Lord D1: `/spawn` aceita somente este contrato v1; não há tradução do payload legado.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SpawnRequestV1 {
+    version: u8,
+    request_id: String,
+    provider: String,
+    task: String,
+    cwd: Option<String>,
+    project_id: Option<String>,
+    origin: String,
+    name: Option<String>,
+}
+
+// Lord D1: O evento interno usa camelCase por ser consumido diretamente pelo TypeScript.
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SpawnEventV1 {
+    version: u8,
+    request_id: String,
+    job_id: String,
+    provider: String,
+    task: String,
+    cwd: Option<String>,
+    project_id: Option<String>,
+    origin: String,
+    name: Option<String>,
+}
+
+// Lord D1: Confirmações aceitas do consumidor único do workspace.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SpawnReportV1 {
+    request_id: String,
+    status: SpawnStatus,
+    terminal_id: Option<String>,
+    reason: Option<String>,
+}
 
 fn init_token() -> &'static str {
     LISTENER_TOKEN.get_or_init(|| nanoid::nanoid!(32))
@@ -41,7 +85,7 @@ fn listener_endpoint(port: u16) -> String {
     format!("http://{HOST}:{port}")
 }
 
-// Lord B1: Publish only transport coordinates; the listener still receives ready-to-run work.
+// Lord D1: Publica transporte e versão; o listener recebe somente trabalho pronto para executar.
 fn write_listener_discovery(app: &AppHandle, port: u16) -> Result<(), String> {
     let profile = crate::profiles::active_profile_state(app)?;
     let profile_dir = crate::profiles::profile_data_dir_for_id(app, &profile.id)?;
@@ -49,6 +93,7 @@ fn write_listener_discovery(app: &AppHandle, port: u16) -> Result<(), String> {
     let discovery = serde_json::json!({
         "endpoint": listener_endpoint(port),
         "token": init_token(),
+        "spawn_protocol_version": 1,
     });
     let body = serde_json::to_string_pretty(&discovery).map_err(|error| error.to_string())?;
     std::fs::write(&path, body).map_err(|error| error.to_string())?;
@@ -132,6 +177,140 @@ pub fn agent_hooks_settings_path() -> Result<String, String> {
     Ok(path.to_string_lossy().to_string())
 }
 
+// Lord D1: A reivindicação atômica impede dois listeners de criarem a mesma aba.
+#[tauri::command]
+pub fn agent_spawn_claim(
+    state: State<'_, SpawnRegistry>,
+    request_id: String,
+) -> bool {
+    state.claim(&request_id)
+}
+
+// Lord D1: Estados posteriores só entram após confirmação explícita do frontend/runtime.
+#[tauri::command]
+pub fn agent_spawn_report(
+    state: State<'_, SpawnRegistry>,
+    report: SpawnReportV1,
+) -> Result<SpawnResponseV1, String> {
+    state.report(
+        &report.request_id,
+        report.status,
+        report.terminal_id,
+        report.reason,
+    )
+}
+
+// Lord D1: Validação rejeita antes do evento, mas preserva correlação quando o JSON a fornece.
+fn parse_spawn_request(body: &str) -> Result<SpawnRequestV1, SpawnResponseV1> {
+    let raw = match serde_json::from_str::<serde_json::Value>(body) {
+        Ok(raw) => raw,
+        Err(_) => return Err(SpawnResponseV1::rejected("", "", "invalid_json")),
+    };
+    let request_id = raw
+        .get("request_id")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string();
+    let provider = raw
+        .get("provider")
+        .and_then(|value| value.as_str())
+        .unwrap_or("")
+        .to_string();
+    let request = match serde_json::from_value::<SpawnRequestV1>(raw) {
+        Ok(request) => request,
+        Err(_) => {
+            return Err(SpawnResponseV1::rejected(
+                request_id,
+                provider,
+                "invalid_request",
+            ))
+        }
+    };
+
+    if request.version != 1 {
+        return Err(SpawnResponseV1::rejected(
+            request.request_id,
+            request.provider,
+            "unsupported_version",
+        ));
+    }
+    if request.request_id.trim().is_empty() {
+        return Err(SpawnResponseV1::rejected(
+            request.request_id,
+            request.provider,
+            "invalid_request_id",
+        ));
+    }
+    if !matches!(
+        request.provider.as_str(),
+        "shell" | "claude" | "codex" | "opencode"
+    ) {
+        return Err(SpawnResponseV1::rejected(
+            request.request_id,
+            request.provider,
+            "invalid_provider",
+        ));
+    }
+    if request.task.trim().is_empty() {
+        return Err(SpawnResponseV1::rejected(
+            request.request_id,
+            request.provider,
+            "empty_task",
+        ));
+    }
+    if request.origin.trim().is_empty() {
+        return Err(SpawnResponseV1::rejected(
+            request.request_id,
+            request.provider,
+            "invalid_origin",
+        ));
+    }
+    let has_cwd = request
+        .cwd
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty());
+    let has_project = request
+        .project_id
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|value| !value.is_empty());
+    if !has_cwd && !has_project {
+        return Err(SpawnResponseV1::rejected(
+            request.request_id,
+            request.provider,
+            "missing_target",
+        ));
+    }
+    Ok(request)
+}
+
+// Lord D1: O status HTTP acompanha o estado observável, sem `accepted: true` otimista.
+fn spawn_http_status(response: &SpawnResponseV1) -> u16 {
+    match response.status {
+        SpawnStatus::TerminalCreated | SpawnStatus::PtyStarted => 200,
+        SpawnStatus::Received => 202,
+        SpawnStatus::Rejected if response.reason.as_deref() == Some("no_consumer") => 503,
+        SpawnStatus::Rejected if response.reason.as_deref() == Some("no_matching_project") => 422,
+        SpawnStatus::Rejected if response.reason.as_deref() == Some("terminal_creation_failed") => 500,
+        SpawnStatus::Rejected => 400,
+    }
+}
+
+// Lord D1: Todas as respostas do contrato v1 são JSON e carregam `job_id`.
+fn respond_spawn(request: tiny_http::Request, response: SpawnResponseV1) {
+    let status = spawn_http_status(&response);
+    let header = tiny_http::Header::from_bytes("Content-Type", "application/json")
+        .expect("header Content-Type válido");
+    let _ = request.respond(
+        tiny_http::Response::from_string(
+            serde_json::to_string(&response).expect("SpawnResponseV1 serializável"),
+        )
+        .with_status_code(status)
+        .with_header(header),
+    );
+}
+
 pub fn start_listener(app: AppHandle) {
     std::thread::spawn(move || {
         let mut last_error: Option<String> = None;
@@ -180,65 +359,63 @@ pub fn start_listener(app: AppHandle) {
                 continue;
             }
 
-            // Ponte de dispatch genérica: o control plane (lead) spawna um
-            // processo real (claude/codex/opencode) via
-            // `curl -X POST /spawn -d '{"agent":"codex","task":"...","mode":"exec"}'`.
-            // O Alethe emite `agent-spawn`; o front sobe um PTY worker. Campos:
-            // agent (obrigatório), task, cwd?, mode? ("exec" default | "interactive").
-            if url.starts_with("/spawn") {
-                match serde_json::from_str::<serde_json::Value>(&body) {
-                    Ok(payload) => {
-                        let agent = payload
-                            .get("agent")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("")
-                            .to_string();
-                        if !matches!(agent.as_str(), "shell" | "claude" | "codex" | "opencode") {
-                            let _ = request.respond(tiny_http::Response::from_string(
-                                "agent invalido (use claude|codex|opencode)",
-                            ).with_status_code(400));
-                            continue;
-                        }
-                        let job_id = payload
-                            .get("job_id")
-                            .and_then(|value| value.as_str())
-                            .map(ToOwned::to_owned)
-                            .unwrap_or_else(|| format!("sandbox-job-{}", nanoid::nanoid!(10)));
-                        let mut event_payload = payload;
-                        if let Some(object) = event_payload.as_object_mut() {
-                            object.insert("job_id".to_string(), serde_json::Value::String(job_id.clone()));
-                        }
-                        eprintln!("[agent_events] /spawn agent={agent} job_id={job_id}");
-                        let _ = app.emit("agent-spawn", &event_payload);
-                        let response = serde_json::json!({
-                            "accepted": true,
-                            "job_id": job_id,
-                            "agent": agent,
-                            "status": "queued"
-                        });
-                        let _ = request.respond(tiny_http::Response::from_string(response.to_string())
-                            .with_header(tiny_http::Header::from_bytes("Content-Type", "application/json").unwrap()));
+            // Lord D1: A rota existente muda de contrato; não há `/v1/spawns` nem fallback legado.
+            let route = url.split('?').next().unwrap_or(url.as_str());
+            if route == "/spawn" {
+                if request.method() != &tiny_http::Method::Post {
+                    let response = SpawnResponseV1::rejected("", "", "method_not_allowed");
+                    respond_spawn(request, response);
+                    continue;
+                }
+
+                let payload = match parse_spawn_request(&body) {
+                    Ok(payload) => payload,
+                    Err(response) => {
+                        respond_spawn(request, response);
+                        continue;
                     }
-                    Err(e) => {
-                        let _ = request.respond(tiny_http::Response::from_string(format!(
-                            "/spawn espera JSON: {e}"
-                        )).with_status_code(400));
+                };
+                let registry = app.state::<SpawnRegistry>();
+                let (created, received) = registry.begin(&payload.request_id, &payload.provider);
+
+                if created {
+                    let event_payload = SpawnEventV1 {
+                        version: payload.version,
+                        request_id: payload.request_id.clone(),
+                        job_id: received.job_id.clone(),
+                        provider: payload.provider.clone(),
+                        task: payload.task,
+                        cwd: payload.cwd,
+                        project_id: payload.project_id,
+                        origin: payload.origin,
+                        name: payload.name,
+                    };
+                    eprintln!(
+                        "[agent_events] /spawn provider={} request_id={} job_id={}",
+                        event_payload.provider, event_payload.request_id, event_payload.job_id
+                    );
+                    if let Err(error) = app.emit("lord-agent-spawn-v1", &event_payload) {
+                        eprintln!("[agent_events] falha ao emitir lord-agent-spawn-v1: {error}");
+                        let _ = registry.report(
+                            &event_payload.request_id,
+                            SpawnStatus::Rejected,
+                            None,
+                            Some("emit_failed".to_string()),
+                        );
                     }
                 }
+
+                let response = registry.wait_for_outcome(
+                    &payload.request_id,
+                    SPAWN_CONSUMER_TIMEOUT,
+                );
+                respond_spawn(request, response);
                 continue;
             }
 
-            // Alias legado: o control plane antigo despacha texto cru pro codex
-            // via `curl -X POST /codex -d '<tarefa>'`. Encaminha pro mesmo fluxo
-            // emitindo agent-spawn com agent=codex.
-            if url.starts_with("/codex") {
-                let task = body.trim().to_string();
-                eprintln!("[agent_events] /codex (legado) task ({} chars)", task.len());
-                let payload = serde_json::json!({ "agent": "codex", "task": task });
-                let _ = app.emit("agent-spawn", &payload);
-                let _ = request.respond(tiny_http::Response::from_string(
-                    "queued no terminal codex do Alethe",
-                ));
+            // Lord D1: O alias `/codex` foi removido junto com o contrato fire-and-forget.
+            if route == "/codex" || route.starts_with("/spawn/") {
+                let _ = request.respond(tiny_http::Response::empty(404));
                 continue;
             }
 
@@ -286,4 +463,59 @@ pub fn start_listener(app: AppHandle) {
             let _ = request.respond(tiny_http::Response::empty(200));
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Lord D1: O parser comprova a ruptura intencional com o payload fire-and-forget.
+    #[test]
+    fn accepts_the_v1_spawn_contract() {
+        let request = parse_spawn_request(
+            r#"{
+                "version": 1,
+                "request_id": "request-1",
+                "provider": "codex",
+                "task": "Implement the slice",
+                "cwd": "C:/work/project",
+                "origin": "lord"
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(request.request_id, "request-1");
+        assert_eq!(request.provider, "codex");
+    }
+
+    #[test]
+    fn rejects_the_legacy_spawn_payload_with_a_traceable_job() {
+        let response = parse_spawn_request(
+            r#"{"agent":"codex","task":"Implement the slice","mode":"exec"}"#,
+        )
+        .unwrap_err();
+
+        assert_eq!(response.status, SpawnStatus::Rejected);
+        assert_eq!(response.reason.as_deref(), Some("invalid_request"));
+        assert!(response.job_id.starts_with("spawn-job-"));
+    }
+
+    #[test]
+    fn rejects_empty_tasks_before_emitting_an_event() {
+        let response = parse_spawn_request(
+            r#"{
+                "version": 1,
+                "request_id": "request-2",
+                "provider": "claude",
+                "task": "   ",
+                "project_id": "project-a",
+                "origin": "lord"
+            }"#,
+        )
+        .unwrap_err();
+
+        assert_eq!(response.status, SpawnStatus::Rejected);
+        assert_eq!(response.reason.as_deref(), Some("empty_task"));
+        assert_eq!(response.request_id, "request-2");
+    }
 }

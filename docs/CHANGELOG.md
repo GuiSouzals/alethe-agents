@@ -12,7 +12,9 @@ Mudanças relevantes do **Alethe** para quem usa o app. Formato inspirado em
 
 ### Adicionado
 
-- **External agent dispatch now opens a persistent workspace terminal.** Authenticated `/spawn` requests use the requested agent, working directory, and task, while a profile-local discovery file exposes the listener endpoint and token to external processes.
+- **Cursor Agent as a first-class CLI.** New agent type with resolver (`cursor-agent` / `agent`), Windows shim promotion to `.cmd`, interactive launch adapter, theme token, icon, Home quick-start, terminal/sub-tab pickers, and preferences toggle.
+- **Honest Cursor availability card and topbar pill (D3).** Shows CLI connected / missing / sign-in state and a link to the Cursor dashboard — never a local usage percentage or progress bar.
+- **External agent dispatch now has a truthful, idempotent v1 contract.** Authenticated `/spawn` requests correlate `request_id`, job, project, and terminal state; duplicate requests reuse the same terminal, invalid or unmatched targets are explicitly rejected, and a missing UI consumer can no longer report a false queued success. The profile-local discovery file still exposes the listener endpoint and token to external processes.
 - **Added a manually triggered Windows-only CI build for Lord installers.** The workflow uploads MSI and NSIS bundles as artifacts without creating a release or requiring updater signing secrets.
 - **Colar conteúdo do portapapeles via clique direito no terminal (`XTermView`).** Clicar com o botão direito sobre o painel do terminal sem texto selecionado cola o conteúdo do portapapeles (texto, imagens e arquivos). Caso haja texto selecionado no terminal, o clique direito copia a seleção para o portapapeles e limpa o destaque.
 

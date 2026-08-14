@@ -115,6 +115,13 @@ export function buildAgentLaunch(
     }
   }
 
+  // Lord F1: launch interativo do Cursor. Retomada (--resume / ls) fica fora
+  // desta fatia — schema de `cursor-agent ls` ainda NÃO CONFIRMADO. Sem flags
+  // irrestritas por default.
+  if (agent === 'cursor') {
+    return { args: [...baseArgs], sessionId: undefined, createdSession: false }
+  }
+
   // freebuff/mimo (e qualquer agente sem sintaxe própria de resume): só executa o
   // binário com os args base. freebuff não documenta flag de resume; o Mimo Code
   // retoma a sessão automaticamente via memória persistente, sem flag.

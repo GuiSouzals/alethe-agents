@@ -1001,6 +1001,12 @@
   background: color-mix(in srgb, var(--agent-mimo) 16%, transparent);
   border-color: color-mix(in srgb, var(--agent-mimo) 28%, transparent);
 }
+/* Lord F1: */
+.notifCursor {
+  color: var(--agent-cursor);
+  background: color-mix(in srgb, var(--agent-cursor) 16%, transparent);
+  border-color: color-mix(in srgb, var(--agent-cursor) 28%, transparent);
+}
 
 .notifBody {
   display: flex;
@@ -1051,7 +1057,12 @@
 }
 
 .usageStripTwo {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+/* Lord F1: Home — Claude / Codex / Cursor / Activity */
+.usageStripWithCursor {
+  grid-template-columns: 1fr 1fr 1fr 1.15fr;
 }
 
 @media (max-width: 1100px) {
@@ -1116,6 +1127,12 @@
   color: var(--agent-antigravity);
   background: var(--agent-antigravity-soft);
   border-color: color-mix(in srgb, var(--agent-antigravity) 28%, transparent);
+}
+/* Lord F1: */
+.badgeCursor {
+  color: var(--agent-cursor);
+  background: var(--agent-cursor-soft);
+  border-color: color-mix(in srgb, var(--agent-cursor) 28%, transparent);
 }
 .badgeActivity {
   color: var(--status-working);
@@ -1338,6 +1355,22 @@
 .cardFootRight {
   color: var(--text-quaternary);
   flex-shrink: 0;
+}
+
+/* Lord F1: */
+.cursorDashboardLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--agent-cursor);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.cursorDashboardLink:hover {
+  color: var(--fg);
 }
 
 /* ---- estado vazio ---- */

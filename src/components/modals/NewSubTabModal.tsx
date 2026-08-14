@@ -4,22 +4,31 @@ import { useEffect, useMemo, useState } from 'react'
 import { useUiStore } from '../../stores/uiStore'
 import { useProjectsStore } from '../../stores/projectsStore'
 import { pickDirectory } from '../../lib/dialog'
-import { UNRESTRICTED_FLAG, type AgentRuntimeProfile, type AgentType } from '../../lib/types'
+import {
+  AGENT_TYPE_LABELS,
+  ALL_AGENT_TYPES,
+  UNRESTRICTED_FLAG,
+  type AgentRuntimeProfile,
+  type AgentType,
+} from '../../lib/types'
 import { AgentIcon } from '../icons/AgentIcons'
 import { useT } from '../../lib/i18n'
 import { Modal } from './Modal'
 import controls from './controls.module.css'
 import picker from './agentPicker.module.css'
 
-const AGENTS: { type: AgentType; label: string }[] = [
-  { type: 'shell', label: 'Shell' },
-  { type: 'claude', label: 'Claude' },
-  { type: 'codex', label: 'Codex' },
-  { type: 'antigravity', label: 'Antigravity' },
-  { type: 'opencode', label: 'OpenCode' },
-  { type: 'freebuff', label: 'Freebuff' },
-  { type: 'mimo', label: 'Mimo' },
-]
+// Lord F1: lista derivada de ALL_AGENT_TYPES (inclui cursor).
+const AGENTS: { type: AgentType; label: string }[] = ALL_AGENT_TYPES.map((type) => ({
+  type,
+  label: AGENT_TYPE_LABELS[type],
+}))
+
+function emptyUnrestricted(): Record<AgentType, boolean> {
+  return Object.fromEntries(ALL_AGENT_TYPES.map((agent) => [agent, false])) as Record<
+    AgentType,
+    boolean
+  >
+}
 
 export function NewSubTabModal() {
   const t = useT()
@@ -43,15 +52,7 @@ export function NewSubTabModal() {
   const [type, setType] = useState<AgentType>('shell')
   const [runtimeProfile, setRuntimeProfile] = useState<AgentRuntimeProfile>('lean')
   const [cwd, setCwd] = useState('')
-  const [unrestricted, setUnrestricted] = useState<Record<AgentType, boolean>>({
-    shell: false,
-    claude: false,
-    codex: false,
-    antigravity: false,
-    opencode: false,
-    freebuff: false,
-    mimo: false,
-  })
+  const [unrestricted, setUnrestricted] = useState<Record<AgentType, boolean>>(emptyUnrestricted)
 
   const visibleAgents = AGENTS.filter((a) => enabled[a.type])
   const inheritedCwd = useMemo(() => {
@@ -69,15 +70,7 @@ export function NewSubTabModal() {
     setType('shell')
     setRuntimeProfile('lean')
     setCwd('')
-    setUnrestricted({
-      shell: false,
-      claude: false,
-      codex: false,
-      antigravity: false,
-      opencode: false,
-      freebuff: false,
-      mimo: false,
-    })
+    setUnrestricted(emptyUnrestricted())
   }
 
   const submit = () => {

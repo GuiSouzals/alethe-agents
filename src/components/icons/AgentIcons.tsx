@@ -71,6 +71,25 @@ export function AntigravityIcon({ size = 16 }: { size?: number }) {
   return <img src={antigravityLogo} alt="" width={size} height={size} draggable={false} />
 }
 
+/**
+ * Lord F1: lettermark original (não é o logo proprietário da Cursor, Inc.).
+ * Triângulo/cursor geométrico monocromático via currentColor — licença do
+ * próprio repositório AGPL; sem asset de terceiros.
+ */
+export function CursorIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M3.2 2.4 12.8 7.2l-4.1 1.1 1.1 4.1L3.2 2.4Z" />
+    </svg>
+  )
+}
+
 export function AgentIcon({
   type,
   size = 16,
@@ -86,5 +105,7 @@ export function AgentIcon({
   if (type === 'freebuff') return <FreebuffIcon size={size} />
   if (type === 'mimo') return <MimoIcon size={size} />
   if (type === 'antigravity') return <AntigravityIcon size={size} />
+  // Lord F1: sem cair no ícone OpenCode.
+  if (type === 'cursor') return <CursorIcon size={size} />
   return <OpenCodeIcon size={size} theme={theme} />
 }

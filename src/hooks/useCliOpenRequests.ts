@@ -17,12 +17,21 @@ import { useUiStore } from '../stores/uiStore'
  */
 
 /** Ordem de preferência do agente do primeiro terminal; cai em `shell`. */
-const AGENT_PREFERENCE: AgentType[] = ['claude', 'codex', 'antigravity', 'opencode', 'shell']
+const AGENT_PREFERENCE: AgentType[] = [
+  'claude',
+  'codex',
+  'antigravity',
+  // Lord F1:
+  'cursor',
+  'opencode',
+  'shell',
+]
 
 const AGENT_LABEL: Record<AgentType, string> = {
   claude: 'Claude',
   codex: 'Codex',
   antigravity: 'Antigravity',
+  cursor: 'Cursor',
   opencode: 'OpenCode',
   shell: 'Shell',
   mimo: 'Mimo',

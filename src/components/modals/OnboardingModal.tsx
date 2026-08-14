@@ -43,6 +43,8 @@ const AGENTS: { id: CodingAgent; label: string }[] = [
   { id: 'claude', label: 'Claude' },
   { id: 'codex', label: 'Codex' },
   { id: 'antigravity', label: 'Antigravity' },
+  // Lord F1:
+  { id: 'cursor', label: 'Cursor' },
   { id: 'opencode', label: 'OpenCode' },
   { id: 'freebuff', label: 'Freebuff' },
   { id: 'mimo', label: 'Mimo' },

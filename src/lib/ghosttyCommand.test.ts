@@ -13,6 +13,8 @@ describe('buildGhosttyCommand', () => {
     expect(buildGhosttyCommand('codex')).toBe('codex')
     expect(buildGhosttyCommand('opencode')).toBe('opencode')
     expect(buildGhosttyCommand('antigravity')).toBe('agy')
+    // Lord F1:
+    expect(buildGhosttyCommand('cursor')).toBe('cursor-agent')
   })
 
   it('inclui extraArgs simples sem aspas', () => {

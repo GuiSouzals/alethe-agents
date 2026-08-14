@@ -369,7 +369,12 @@ pub async fn spawn_pty(
             .map(PathBuf::from)
             .filter(|p| p.is_file())
         {
-            Some(override_path.to_string_lossy().to_string())
+            // Lord F1: promove shim sem extensão (.cmd/.exe/…) antes do spawn.
+            Some(
+                crate::cli_resolver::promote_windows_executable_path(override_path)
+                    .to_string_lossy()
+                    .to_string(),
+            )
         } else {
             requested_command
                 .as_deref()

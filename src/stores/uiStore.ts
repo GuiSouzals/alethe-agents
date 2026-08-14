@@ -3,6 +3,7 @@ import type {
   AntigravityUsage,
   ClaudeUsage,
   CodexUsage,
+  CursorCliStatus,
   MemoryStats,
   RuntimeSnapshot,
 } from '../lib/tauri'
@@ -69,6 +70,8 @@ type UiState = {
   claudeUsage: ClaudeUsage | null
   codexUsage: CodexUsage | null
   antigravityUsage: AntigravityUsage | null
+  /** Lord F1: status do Cursor CLI (sem medidor de consumo). */
+  cursorCliStatus: CursorCliStatus | null
   /** ID do terminal em focus mode (overlay fullscreen blur). null = sem focus. */
   focusedTerminalId: string | null
   /** Pulse that requests focus for a specific pane. */
@@ -104,6 +107,8 @@ type UiState = {
   setClaudeUsage: (value: ClaudeUsage | null) => void
   setCodexUsage: (value: CodexUsage | null) => void
   setAntigravityUsage: (value: AntigravityUsage | null) => void
+  // Lord F1:
+  setCursorCliStatus: (value: CursorCliStatus | null) => void
   setFocusedTerminal: (id: string | null) => void
   requestPaneFocus: (terminalId: string) => void
   setActiveTerminal: (projectId: string, terminalId: string) => void
@@ -142,6 +147,8 @@ export const useUiStore = create<UiState>((set) => ({
   claudeUsage: null,
   codexUsage: null,
   antigravityUsage: null,
+  // Lord F1:
+  cursorCliStatus: null,
   focusedTerminalId: null,
   focusRequest: null,
   activeTerminal: null,
@@ -173,6 +180,8 @@ export const useUiStore = create<UiState>((set) => ({
   setClaudeUsage: (value) => set({ claudeUsage: value }),
   setCodexUsage: (value) => set({ codexUsage: value }),
   setAntigravityUsage: (value) => set({ antigravityUsage: value }),
+  // Lord F1:
+  setCursorCliStatus: (value) => set({ cursorCliStatus: value }),
   setFocusedTerminal: (id) => set({ focusedTerminalId: id }),
   requestPaneFocus: (terminalId) => set({ focusRequest: { terminalId, ts: Date.now() } }),
   setActiveTerminal: (projectId, terminalId) => set({ activeTerminal: { projectId, terminalId } }),

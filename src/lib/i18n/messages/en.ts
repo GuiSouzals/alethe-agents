@@ -91,6 +91,8 @@ export const en = {
   'agent.freebuff.desc': 'Free coding agent',
   'agent.mimo.desc': 'Xiaomi CLI',
   'agent.antigravity.desc': 'Google Antigravity CLI',
+  // Lord F1:
+  'agent.cursor.desc': 'Cursor Agent CLI',
 
   /* ---- image input ---- */
   'image.placeholder': 'https://example.com/icon.png',
@@ -723,6 +725,24 @@ export const en = {
   'widget.antigravityNotInstalled': 'agy CLI not installed',
   'widget.antigravityNotSignedIn': 'not signed in to agy',
   'widget.antigravityUsageHint': 'run agy and sign in to see live quotas',
+  // Lord F1: Cursor availability — never a percentage.
+  'widget.cursorNotInstalled': 'Cursor CLI not installed',
+  'widget.cursorNotSignedIn': 'not signed in to Cursor CLI',
+  'widget.cursorInstallHint': 'install the Cursor CLI to launch sessions from this workspace',
+  'widget.cursorSignInHint': 'run agent login — usage lives in the Cursor dashboard, not here',
+  'widget.cursorCliConnected': 'CLI connected · usage in dashboard',
+  'widget.cursorCliFound': 'Cursor CLI found',
+  'widget.cursorUsageInDashboard':
+    'Open the Cursor dashboard for the real usage number — this card never invents a percentage',
+  'widget.cursorPillConnected': 'CLI · dashboard',
+  'widget.cursorOpenDashboard': 'Open dashboard',
+  'widget.cursorProcessLabel': 'process',
+  'widget.cursorProcessRunning': 'running',
+  'widget.cursorProcessStopped': 'stopped',
+  'widget.cursorStatusReady': 'CLI connected',
+  'widget.cursorStatusNoAuth': 'not signed in',
+  'widget.cursorStatusNoCli': 'not installed',
+  'widget.cursorStatusUnknown': 'status unknown',
   'widget.usageUnavailable': 'usage unavailable',
   'widget.mostUsed': 'most used',
   'widget.mostUsedBucket': 'most used · {name}',
@@ -959,6 +979,9 @@ export const en = {
   'ui.titlebar.itemClaude': 'Claude Code usage',
   'ui.titlebar.itemCodex': 'Codex usage',
   'ui.titlebar.itemAntigravity': 'Antigravity status',
+  // Lord F1:
+  'ui.titlebar.itemCursor': 'Cursor CLI status',
+  'ui.titlebar.cursorStatusTooltip': 'Cursor CLI · usage lives in the dashboard (no local meter)',
   'ui.titlebar.itemSync': 'Cloud sync',
   'ui.titlebar.itemProfile': 'Local profile',
   'ui.titlebar.itemMemory': 'Memory usage',

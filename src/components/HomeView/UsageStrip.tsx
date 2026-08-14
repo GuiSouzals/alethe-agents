@@ -1,12 +1,21 @@
-import { Clock, RefreshCw } from 'lucide-react'
+import { Clock, ExternalLink, RefreshCw } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { getCachedClaudeUsage } from '../../lib/claudeUsageCache'
 import { getCachedCodexUsage } from '../../lib/codexUsageCache'
 import { getCachedAntigravityUsage } from '../../lib/antigravityUsageCache'
+import { getCachedCursorCliStatus } from '../../lib/cursorCliStatusCache'
+import {
+  CURSOR_USAGE_DASHBOARD_URL,
+  cursorAvailabilityCopy,
+  resolveCursorProcessState,
+} from '../../lib/cursorAvailability'
 import { translate, getLocale, useT } from '../../lib/i18n'
-import type { AntigravityUsage, ClaudeUsage, CodexUsage } from '../../lib/tauri'
+import { openInBrowser } from '../../lib/tauri'
+import type { AntigravityUsage, ClaudeUsage, CodexUsage, CursorCliStatus } from '../../lib/tauri'
+import { useProjectsStore } from '../../stores/projectsStore'
+import { useTerminalsStore } from '../../stores/terminalsStore'
 import { useUiStore } from '../../stores/uiStore'
-import { AntigravityIcon, ClaudeIcon, CodexIcon } from '../icons/AgentIcons'
+import { AntigravityIcon, ClaudeIcon, CodexIcon, CursorIcon } from '../icons/AgentIcons'
 import { ActivityGraph } from './ActivityGraph'
 import styles from './HomeView.module.css'
 
@@ -494,15 +503,118 @@ function AntigravityCard({ usage }: { usage: AntigravityUsage | null }) {
   )
 }
 
+/** Lord F1: cartão honesto — CLI / auth / processo. Sem % e sem barra (D3). */
+function CursorCard({ status }: { status: CursorCliStatus | null }) {
+  const t = useT()
+  const setCursorCliStatus = useUiStore((s) => s.setCursorCliStatus)
+  const projects = useProjectsStore((s) => s.projects)
+  const byPtyId = useTerminalsStore((s) => s.byPtyId)
+  const accent = 'var(--agent-cursor)'
+  const copy = cursorAvailabilityCopy(status)
+  const processState = resolveCursorProcessState(projects, byPtyId)
+  const connected = status?.status === 'ready'
+
+  const refresh = async () => {
+    try {
+      setCursorCliStatus(await getCachedCursorCliStatus(true))
+    } catch {
+      setCursorCliStatus(null)
+    }
+  }
+
+  const openDashboard = () => {
+    void openInBrowser(CURSOR_USAGE_DASHBOARD_URL)
+  }
+
+  const head = (
+    <CardHead
+      badgeClass={styles.badgeCursor}
+      icon={<CursorIcon size={16} />}
+      name="cursor"
+      plan={connected ? t('widget.cursorPillConnected') : undefined}
+      accent={accent}
+      hasData={connected}
+      onRefresh={refresh}
+    />
+  )
+
+  const emptyTitle =
+    status?.status === 'no_cli'
+      ? t('widget.cursorNotInstalled')
+      : status?.status === 'no_auth'
+        ? t('widget.cursorNotSignedIn')
+        : status?.status === 'ready'
+          ? t('widget.cursorCliConnected')
+          : t('widget.cursorCliFound')
+
+  return (
+    <div className={styles.usageCard} data-agent="cursor">
+      {head}
+      <div className={styles.usageEmpty}>
+        <span className={styles.usageEmptyTitle}>{emptyTitle}</span>
+        <span className={styles.usageEmptyHint}>
+          {status?.status === 'ready'
+            ? t('widget.cursorUsageInDashboard')
+            : status?.status === 'no_auth'
+              ? t('widget.cursorSignInHint')
+              : status?.status === 'no_cli'
+                ? t('widget.cursorInstallHint')
+                : t('widget.cursorUsageInDashboard')}
+        </span>
+      </div>
+      <div className={styles.cardBody}>
+        <div className={styles.statGrid}>
+          <StatCell
+            label={t('widget.statusLabel')}
+            value={
+              status?.status === 'ready'
+                ? t('widget.cursorStatusReady')
+                : status?.status === 'no_auth'
+                  ? t('widget.cursorStatusNoAuth')
+                  : status?.status === 'no_cli'
+                    ? t('widget.cursorStatusNoCli')
+                    : t('widget.cursorStatusUnknown')
+            }
+          />
+          <StatCell
+            label={t('widget.cursorProcessLabel')}
+            value={
+              processState === 'running'
+                ? t('widget.cursorProcessRunning')
+                : t('widget.cursorProcessStopped')
+            }
+          />
+        </div>
+      </div>
+      <CardFoot
+        accent={accent}
+        left={copy.pill}
+        right={
+          <button type="button" className={styles.cursorDashboardLink} onClick={openDashboard}>
+            <ExternalLink size={11} />
+            {t('widget.cursorOpenDashboard')}
+          </button>
+        }
+      />
+    </div>
+  )
+}
+
 export function UsageStrip({ showActivity = true }: { showActivity?: boolean }) {
   const claudeUsage = useUiStore((s) => s.claudeUsage)
   const codexUsage = useUiStore((s) => s.codexUsage)
   const antigravityUsage = useUiStore((s) => s.antigravityUsage)
+  // Lord F1:
+  const cursorCliStatus = useUiStore((s) => s.cursorCliStatus)
 
   return (
-    <div className={`${styles.usageStrip} ${showActivity ? '' : styles.usageStripTwo}`}>
+    <div
+      className={`${styles.usageStrip} ${showActivity ? styles.usageStripWithCursor : styles.usageStripTwo}`}
+    >
       <ClaudeCard usage={claudeUsage} />
       <CodexCard usage={codexUsage} />
+      {/* Lord F1: cartão honesto do Cursor (D3 — sem % / barra). */}
+      <CursorCard status={cursorCliStatus} />
       {!showActivity ? <AntigravityCard usage={antigravityUsage} /> : null}
       {showActivity ? <ActivityGraph /> : null}
     </div>

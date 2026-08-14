@@ -96,6 +96,8 @@
   --agent-freebuff: #7c5cff;
   --agent-mimo: #ff7a1a;
   --agent-antigravity: #4285f4;
+  /* Lord F1: identidade visual do Cursor (token, sem cor literal nos componentes). */
+  --agent-cursor: #e4e4e7;
   --agent-shell-soft: rgba(16, 185, 129, 0.14);
   --agent-claude-soft: rgba(236, 147, 51, 0.15);
   --agent-codex-soft: rgba(6, 182, 212, 0.15);
@@ -103,6 +105,8 @@
   --agent-freebuff-soft: rgba(124, 92, 255, 0.15);
   --agent-mimo-soft: rgba(255, 122, 26, 0.15);
   --agent-antigravity-soft: rgba(66, 133, 244, 0.15);
+  /* Lord F1: */
+  --agent-cursor-soft: rgba(228, 228, 231, 0.15);
 
   /* foco dotted (Alethe focus mode) */
   --focus-ring: #38bdf8;

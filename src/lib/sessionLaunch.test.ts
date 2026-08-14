@@ -60,4 +60,14 @@ describe('buildAgentLaunch', () => {
       ).args,
     ).toEqual(['--conversation', 'agy-pane', '--dangerously-skip-permissions'])
   })
+
+  // Lord F1:
+  it('Cursor launches with base args only and ignores unknown session ids for now', () => {
+    expect(buildAgentLaunch('cursor', ['--model', 'auto'], 'chat-id').args).toEqual([
+      '--model',
+      'auto',
+    ])
+    expect(buildAgentLaunch('cursor', [], 'chat-id').sessionId).toBeUndefined()
+    expect(buildAgentLaunch('cursor', []).createdSession).toBe(false)
+  })
 })

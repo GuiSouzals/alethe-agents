@@ -33,6 +33,8 @@ mod process_tree;
 mod resource_manager;
 mod session_watcher;
 mod spotify;
+// Lord D1: Registro correlacionado do contrato incompatível de spawn v1.
+mod spawn_state;
 mod stats;
 mod window_style;
 #[cfg(windows)]
@@ -145,6 +147,8 @@ pub fn run() {
         .manage(discord_presence::DiscordPresence::new())
         .manage(planning::PlanningWatchers::default())
         .manage(cli_launch::PendingOpen::default())
+        // Lord D1: Uma única fonte de idempotência atende HTTP e confirmações do frontend.
+        .manage(spawn_state::SpawnRegistry::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_process::init())
@@ -239,6 +243,9 @@ pub fn run() {
             agent_events::agent_hooks_settings_path,
             agent_events::agent_hooks_endpoint,
             agent_events::agent_hooks_token,
+            // Lord D1: Handshake do consumidor e confirmação de estado real do spawn.
+            agent_events::agent_spawn_claim,
+            agent_events::agent_spawn_report,
             codex_app_server::codex_app_server_start,
             codex_app_server::codex_app_server_send,
             codex_app_server::codex_app_server_stop,

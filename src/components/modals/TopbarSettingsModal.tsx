@@ -1,6 +1,6 @@
 import { Check, Cloud, MemoryStick, UserRound } from 'lucide-react'
 
-import { AntigravityIcon, ClaudeIcon, CodexIcon } from '../icons/AgentIcons'
+import { AntigravityIcon, ClaudeIcon, CodexIcon, CursorIcon } from '../icons/AgentIcons'
 import { useT } from '../../lib/i18n'
 import type { Preferences } from '../../lib/types'
 import { useProjectsStore } from '../../stores/projectsStore'
@@ -13,6 +13,7 @@ type ToggleKey = keyof Pick<
   | 'topbarShowClaudeUsage'
   | 'topbarShowCodexUsage'
   | 'topbarShowAntigravityUsage'
+  | 'topbarShowCursorStatus'
   | 'topbarShowSync'
   | 'topbarShowProfile'
   | 'topbarShowMemory'
@@ -39,6 +40,12 @@ export function TopbarSettingsModal() {
       key: 'topbarShowAntigravityUsage',
       label: t('ui.titlebar.itemAntigravity'),
       icon: <AntigravityIcon size={18} />,
+    },
+    {
+      // Lord F1:
+      key: 'topbarShowCursorStatus',
+      label: t('ui.titlebar.itemCursor'),
+      icon: <CursorIcon size={18} />,
     },
     { key: 'topbarShowSync', label: t('ui.titlebar.itemSync'), icon: <Cloud size={18} /> },
     {

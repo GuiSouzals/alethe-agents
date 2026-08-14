@@ -124,6 +124,11 @@ function buildNotificationBody(options: AgentCompletionMonitorOptions): string {
 function agentLabel(agent: Exclude<AgentType, 'shell'>): string {
   if (agent === 'claude') return 'Claude'
   if (agent === 'codex') return 'Codex'
+  if (agent === 'antigravity') return 'Antigravity'
+  // Lord F1:
+  if (agent === 'cursor') return 'Cursor'
+  if (agent === 'mimo') return 'Mimo'
+  if (agent === 'freebuff') return 'Freebuff'
   return 'OpenCode'
 }
 

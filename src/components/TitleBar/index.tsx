@@ -21,15 +21,20 @@ import {
 import { useEffect, useRef, useState } from 'react'
 
 import { ContextMenu, type MenuItem } from '../ProjectSidebar/ContextMenu'
-import { AntigravityIcon, ClaudeIcon, CodexIcon } from '../icons/AgentIcons'
+import { AntigravityIcon, ClaudeIcon, CodexIcon, CursorIcon } from '../icons/AgentIcons'
 
 import { getCachedClaudeUsage } from '../../lib/claudeUsageCache'
 import { getCachedCodexUsage } from '../../lib/codexUsageCache'
 import { getCachedAntigravityUsage } from '../../lib/antigravityUsageCache'
+import { getCachedCursorCliStatus } from '../../lib/cursorCliStatusCache'
+import {
+  CURSOR_USAGE_DASHBOARD_URL,
+  cursorAvailabilityCopy,
+} from '../../lib/cursorAvailability'
+import { openInBrowser, killPty, remoteControlInfo } from '../../lib/tauri'
 import { requestAppClose } from '../../hooks/useCloseConfirmation'
 import { observeClaudeReset, observeCodexReset } from '../../lib/limitResetWatch'
 import { useT } from '../../lib/i18n'
-import { killPty, remoteControlInfo } from '../../lib/tauri'
 import { useProjectsStore } from '../../stores/projectsStore'
 import { useUiStore } from '../../stores/uiStore'
 import styles from './TitleBar.module.css'
@@ -99,10 +104,13 @@ export function TitleBar() {
   const claudeUsage = useUiStore((s) => s.claudeUsage)
   const codexUsage = useUiStore((s) => s.codexUsage)
   const antigravityUsage = useUiStore((s) => s.antigravityUsage)
+  // Lord F1:
+  const cursorCliStatus = useUiStore((s) => s.cursorCliStatus)
   const updateInfo = useUiStore((s) => s.updateInfo)
   const setClaudeUsage = useUiStore((s) => s.setClaudeUsage)
   const setCodexUsage = useUiStore((s) => s.setCodexUsage)
   const setAntigravityUsage = useUiStore((s) => s.setAntigravityUsage)
+  const setCursorCliStatus = useUiStore((s) => s.setCursorCliStatus)
   const openModal = useUiStore((s) => s.openModal_)
   const workspaceTabs = useProjectsStore((s) => s.workspace.tabs)
   const activeWorkspaceTabId = useProjectsStore((s) => s.workspace.activeTabId)
@@ -263,6 +271,30 @@ export function TitleBar() {
       if (interval !== null) window.clearInterval(interval)
     }
   }, [setAntigravityUsage])
+
+  // Lord F1: status do Cursor CLI (sem medidor de consumo — D3).
+  useEffect(() => {
+    let cancelled = false
+    let interval: number | null = null
+    const tick = async () => {
+      if (!activeRef.current) return
+      try {
+        const status = await getCachedCursorCliStatus()
+        if (!cancelled) setCursorCliStatus(status)
+      } catch {
+        if (!cancelled) setCursorCliStatus(null)
+      }
+    }
+    const startupDelay = window.setTimeout(() => {
+      void tick()
+      interval = window.setInterval(tick, CLAUDE_POLL_INTERVAL_MS)
+    }, 3500)
+    return () => {
+      cancelled = true
+      window.clearTimeout(startupDelay)
+      if (interval !== null) window.clearInterval(interval)
+    }
+  }, [setCursorCliStatus])
 
   const win = getCurrentWindow()
 
@@ -703,6 +735,48 @@ export function TitleBar() {
                   {antigravityUsage.cli_path ? (
                     <div className={styles.usagePopoverFooter} title={antigravityUsage.cli_path}>
                       {antigravityUsage.cli_path.split(/[\\/]/).pop()}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            {preferences.topbarShowCursorStatus && cursorCliStatus !== null ? (
+              <div className={styles.usageWidget}>
+                <button
+                  type="button"
+                  className={`${styles.usagePill} ${styles.cursorStatus}`}
+                  style={{ '--pill-color': 'var(--agent-cursor)' } as React.CSSProperties}
+                  onClick={() => void openInBrowser(CURSOR_USAGE_DASHBOARD_URL)}
+                  title={t('ui.titlebar.cursorStatusTooltip')}
+                  aria-label={t('ui.titlebar.itemCursor')}
+                >
+                  <CursorIcon size={13} />
+                  <span>{cursorAvailabilityCopy(cursorCliStatus).pill}</span>
+                </button>
+                <div
+                  className={styles.usagePopover}
+                  role="tooltip"
+                  aria-label={t('ui.titlebar.itemCursor')}
+                >
+                  <div className={styles.usagePopoverTitle}>{t('ui.titlebar.itemCursor')}</div>
+                  <div className={styles.usagePopoverMain}>
+                    <span>{t('widget.statusLabel')}</span>
+                    <strong>
+                      {cursorCliStatus.status === 'ready'
+                        ? t('widget.cursorStatusReady')
+                        : cursorCliStatus.status === 'no_auth'
+                          ? t('widget.cursorStatusNoAuth')
+                          : cursorCliStatus.status === 'no_cli'
+                            ? t('widget.cursorStatusNoCli')
+                            : t('widget.cursorStatusUnknown')}
+                    </strong>
+                  </div>
+                  <div className={styles.usagePopoverFooter}>
+                    {t('widget.cursorUsageInDashboard')}
+                  </div>
+                  {cursorCliStatus.cli_path ? (
+                    <div className={styles.usagePopoverFooter} title={cursorCliStatus.cli_path}>
+                      {cursorCliStatus.cli_path.split(/[\\/]/).pop()}
                     </div>
                   ) : null}
                 </div>
