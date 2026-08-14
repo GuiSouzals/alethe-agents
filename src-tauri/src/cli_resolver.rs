@@ -776,7 +776,12 @@ fn parse_cursor_model_line(line: &str) -> Option<(String, String)> {
         let id = id.trim().to_string();
         let label = label.trim().to_string();
         if !id.is_empty() {
-            return Some((id, if label.is_empty() { id.clone() } else { label }));
+            // Lord F1 (correção pós-CI): calcular o rótulo ANTES de mover `id` na tupla.
+            // A forma anterior — `(id, if label.is_empty() { id.clone() } ...)` — usa `id`
+            // depois de movê-lo, porque a tupla é avaliada da esquerda para a direita:
+            // erro E0382 (borrow of moved value), pego só no build do CI.
+            let label = if label.is_empty() { id.clone() } else { label };
+            return Some((id, label));
         }
     }
     let id = trimmed.split_whitespace().next()?.to_string();
