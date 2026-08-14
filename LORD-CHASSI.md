@@ -67,63 +67,115 @@ A auditoria do P5 listou quatro pontos. Reverifiquei os quatro no código do for
 resultado muda a conclusão prática de um deles. Tudo abaixo é **fato lido no código**,
 com `arquivo:linha`.
 
-### 3.1 `POST /spawn` — o servidor HTTP local
+### 3.1 `POST /spawn` — o contrato v1
+
+> Reescrito após o commit `c162d28` (D1). A descrição anterior — campos `agent`/`mode`,
+> evento `agent-spawn`, resposta `{"accepted":true,…,"status":"queued"}` e alias `/codex` —
+> descrevia o chassi **antes** de D1 e não existe mais no código. Tudo abaixo foi relido
+> no código atual.
 
 **Existe, sobe sempre, e é autenticado.**
 
 | O quê | Onde | Detalhe |
 | --- | --- | --- |
-| Servidor sobe no boot do app | `src-tauri/src/lib.rs:220` | `agent_events::start_listener(...)`, incondicional, dentro do `setup` |
-| Host e faixa de portas | `src-tauri/src/agent_events.rs:15-17` | `127.0.0.1`, varre `9123..=9143` e fica na primeira livre |
-| Escolha da porta | `src-tauri/src/agent_events.rs:123-134` | primeira que der `bind`; a porta efetiva vai para um `AtomicU16` |
-| Token | `src-tauri/src/agent_events.rs:22-24` | `nanoid!(32)`, gerado **em memória**, por execução |
-| Autenticação | `src-tauri/src/agent_events.rs:26-32`, `:150-153` | header **`X-Alethe-Token`**; sem ele ou errado → **401**, corpo vazio |
-| Limite de corpo | `src-tauri/src/agent_events.rs:18` | 1 MB |
-| Rota `/spawn` | `src-tauri/src/agent_events.rs:167-208` | `POST`, corpo JSON |
-| Agentes aceitos | `src-tauri/src/agent_events.rs:175` | `shell` \| `claude` \| `codex` \| `opencode` — qualquer outro devolve **400** |
-| Campos | `src-tauri/src/agent_events.rs:164-166` (comentário) | `agent` (obrigatório), `task`, `cwd?`, `mode?` (`"exec"` default \| `"interactive"`), `job_id?` |
-| O que faz | `src-tauri/src/agent_events.rs:186-191` | injeta/gera `job_id` e emite o evento Tauri **`agent-spawn`** com o payload |
-| Resposta | `src-tauri/src/agent_events.rs:192-199` | `200` + `{"accepted":true,"job_id":…,"agent":…,"status":"queued"}` |
-| Alias legado | `src-tauri/src/agent_events.rs:213-222` | `POST /codex` com texto cru → mesmo evento, `agent:"codex"` |
-| Outras rotas | `:228-237` `/opencode-status`; `:239-263` qualquer outro caminho → evento `agent-hook` | |
+| Servidor sobe no boot do app | `src-tauri/src/lib.rs:224` | `agent_events::start_listener(...)`, incondicional, dentro do `setup` |
+| Host e faixa de portas | `src-tauri/src/agent_events.rs:18-20` | `127.0.0.1`, varre `9123..=9143` |
+| Escolha da porta | `src-tauri/src/agent_events.rs:325-334` | primeira que der `bind`; a porta efetiva vai para um `AtomicU16` |
+| Token | `src-tauri/src/agent_events.rs:72-74` | `nanoid!(32)`, gerado **em memória**, por execução |
+| Autenticação | `src-tauri/src/agent_events.rs:76-82`, `:356-359` | header **`X-Alethe-Token`**; sem ele ou errado → **401**, corpo vazio, antes de qualquer roteamento |
+| Limite de corpo | `src-tauri/src/agent_events.rs:21` | 1 MB; falha de leitura → **400** com corpo vazio (`:362-365`) |
+| Discovery do contrato | `src-tauri/src/agent_events.rs:25`, `:93-106` | escreve `lord-agent-listener.json` no diretório do perfil ativo, com `endpoint`, `token` e `spawn_protocol_version: 1` |
+| Rota `/spawn` | `src-tauri/src/agent_events.rs:370-421` | só `POST`; outro método → rejeição `method_not_allowed` |
+| Validação do corpo | `src-tauri/src/agent_events.rs:208-292` | `parse_spawn_request` |
+| Providers aceitos | `src-tauri/src/agent_events.rs:250-259` | `shell` \| `claude` \| `codex` \| `cursor` \| `opencode` — qualquer outro → `invalid_provider` |
+| Evento emitido | `src-tauri/src/agent_events.rs:404` | **`lord-agent-spawn-v1`**, payload em camelCase (`SpawnEventV1`, `:46-60`) |
+| Estado e idempotência | `src-tauri/src/spawn_state.rs:61-183` | `SpawnRegistry`, registrado em `src-tauri/src/lib.rs:151` |
+| Status HTTP | `src-tauri/src/agent_events.rs:295-304` | `spawn_http_status`, tabela abaixo |
+| Rotas removidas | `src-tauri/src/agent_events.rs:424-427` | `POST /codex` e qualquer `/spawn/...` → **404** |
+| Outras rotas | `:433-442` `/opencode-status` → evento `opencode-bridge-status`; `:444-472` qualquer outro caminho → evento `agent-hook` | |
 
-**O detalhe que decide tudo: `/spawn` não abre aba nenhuma.** Ele só emite um evento no
-barramento do Tauri. Quem transforma o evento em processo é o *frontend* — e no build
-1.5.0 **não há ninguém escutando**:
+**Corpo aceito.** A struct usa `#[serde(deny_unknown_fields)]`
+(`src-tauri/src/agent_events.rs:30-43`): campo desconhecido derruba a requisição inteira
+com `invalid_request`. Não há tradução do payload antigo.
 
-| Ouvinte de `agent-spawn` | Onde | Alcançável na UI de 1.5.0? |
+| Campo | Tipo | Obrigatório | Regra |
+| --- | --- | --- | --- |
+| `version` | número | sim | tem de ser `1`; qualquer outro → `unsupported_version` |
+| `request_id` | string | sim | não pode ser vazio/só espaço; é a chave de idempotência |
+| `provider` | string | sim | um da lista de providers aceitos |
+| `task` | string | sim | não pode ser vazia/só espaço |
+| `origin` | string | sim | não pode ser vazia/só espaço; identifica quem pediu (ex.: `lord`) |
+| `cwd` | string | condicional | ao menos um entre `cwd` e `project_id` precisa vir preenchido |
+| `project_id` | string | condicional | idem |
+| `name` | string | não | nome da aba; sem ele a UI usa o rótulo do provider |
+| `parent_terminal_id` | string | não | vínculo pai/filho para a UI focar sem inferir |
+
+**`reason` possíveis.** Rejeição sempre é JSON e sempre carrega `job_id` rastreável
+(`src-tauri/src/spawn_state.rs:30-47`).
+
+| `reason` | Origem | Quando |
 | --- | --- | --- |
-| Agent Sandbox (store) | `src/stores/agentSandboxStore.ts:158` | **Não** — a view é fechada por `AGENT_SANDBOX_ENABLED = false` (`src/lib/featureFlags.ts:1`), que gateia render (`src/App.tsx:411`), menu (`src/components/MainMenu/index.tsx:94`) e criação de projeto (`src/components/modals/NewProjectModal.tsx:156`) |
-| Agent Canvas POC | `src/components/AgentCanvasPOC/hooks/useAgentWorkers.ts:162` | **Não** — sem flag, mas **sem porta de entrada** (ver abaixo) |
+| `invalid_json` | `agent_events.rs:211` | corpo não é JSON |
+| `invalid_request` | `:226-231` | JSON válido que não casa com a struct v1 (campo faltando, tipo errado, campo desconhecido) |
+| `unsupported_version` | `:235-240` | `version != 1` |
+| `invalid_request_id` | `:242-247` | `request_id` vazio |
+| `invalid_provider` | `:250-259` | provider fora da lista |
+| `empty_task` | `:260-266` | `task` vazia |
+| `invalid_origin` | `:267-273` | `origin` vazia |
+| `missing_target` | `:284-290` | nem `cwd` nem `project_id` |
+| `method_not_allowed` | `:371-375` | `/spawn` chamado sem `POST` |
+| `emit_failed` | `:404-412` | o `emit` do evento Tauri falhou |
+| `no_consumer` | `spawn_state.rs:177-180` | ninguém reivindicou o pedido dentro do prazo de 2s (`agent_events.rs:23`) |
+| `no_matching_project` | reportado pelo frontend, `src/hooks/resolveSpawnTarget.ts:117` | nenhum projeto casa com `project_id`/`cwd` |
+| `terminal_creation_failed` | reportado pelo frontend, `src/hooks/useAgentSpawnListener.ts:109-114` | `createAgentTerminal` lançou erro |
+| `store_not_hydrated`, `invalid_job_id`, `missing_cwd` | `src/hooks/resolveSpawnTarget.ts:70-99` | validações que só o frontend consegue fazer |
 
-Por que o Canvas é inalcançável: ele só renderiza com `activeView === 'agentCanvas'`
-(`src/App.tsx:413`), e a **única** coisa que chama `setActiveView('agentCanvas')` é a aba
-"Agent Planning" da barra de título (`src/components/TitleBar/index.tsx:490`), que por sua
-vez só é renderizada se `agentCanvasSession` for não-nulo
-(`src/components/TitleBar/index.tsx:480`). Esse estado nasce `null`
-(`src/stores/uiStore.ts:152`), o `uiStore` **não é persistido** (nenhum `persist` no
-arquivo), e o único ponto que o define como não-nulo é `restartClaude`
-(`src/components/AgentCanvasPOC/index.tsx:241`) — que exige uma sessão **já existente**.
-É um laço fechado sobre si mesmo: sem primeira sessão, não há entrada.
+**Mapa de status HTTP** (`spawn_http_status`, `src-tauri/src/agent_events.rs:295-304`), mais
+os dois casos que nem chegam à função:
 
-> **Fato:** no build 1.5.0, `POST /spawn` autentica, responde `200 {"accepted":true}` e o
-> evento morre sem consumidor. O `accepted:true` é uma promessa que o app não cumpre.
->
-> **Análise:** o Canvas não foi desativado por flag, foi *órfão* — a entrada dele saiu da
-> UI e o componente ficou. Isso torna o consumidor de `agent-spawn` código morto no
-> release, não código desligado.
+| Código | Quando |
+| --- | --- |
+| **200** | `status` final `terminal_created` ou `pty_started` |
+| **202** | `status` `received` — pedido reivindicado por um consumidor, ainda sem aba confirmada |
+| **400** | qualquer `rejected` de validação (todos os `reason` acima que não estejam nas linhas seguintes) |
+| **401** | token ausente ou errado — antes do roteamento, corpo vazio |
+| **404** | `POST /codex` e qualquer `/spawn/...` |
+| **422** | `rejected` com `no_matching_project` |
+| **500** | `rejected` com `terminal_creation_failed` |
+| **503** | `rejected` com `no_consumer` |
 
-E há um segundo bloqueio, independente: **o token não é obtenível de fora.** Ele existe só
-em memória e é exposto por dois caminhos, ambos internos ao app —
-o comando Tauri `agent_hooks_token` (`src-tauri/src/agent_events.rs:67-70`, registrado em
-`src-tauri/src/lib.rs:241`), chamável só pelo frontend; e o arquivo
-`%TEMP%\alethe-agent-hooks.json`, escrito por `agent_hooks_settings_path`
-(`src-tauri/src/agent_events.rs:76-116`), que grava o token dentro de
-`headers["X-Alethe-Token"]` (linha `:88`). Só que esse arquivo é escrito por quem chama
-esse comando — e os dois chamadores são exatamente o Canvas
-(`src/components/AgentCanvasPOC/index.tsx:208`) e o Sandbox
-(`src/stores/agentSandboxStore.ts:140`), os dois inalcançáveis. **Se o Canvas está morto,
-o token nunca chega ao disco.**
+**Idempotência por `request_id`.** `SpawnRegistry::begin`
+(`src-tauri/src/spawn_state.rs:67-90`) devolve `(created, response)`: a primeira chamada
+cria o registro, gera o `job_id` e libera a emissão do evento; qualquer repetição com o
+mesmo `request_id` devolve `created = false` e **o mesmo registro**, sem emitir evento novo.
+Consequência: repetir o `POST /spawn` devolve o mesmo `job_id` e, se a aba já existe, o
+mesmo `terminal_id` — não nasce segunda aba. A reivindicação é atômica
+(`claim`, `:93-106`, exposta como comando Tauri `agent_spawn_claim`,
+`agent_events.rs:186-192`): só um consumidor pega cada pedido. As transições posteriores
+entram por `agent_spawn_report` (`:195-206` → `report`, `spawn_state.rs:109-159`) e não
+regridem — `rejected` e `pty_started` são terminais, e `pty_started` exige o mesmo
+`terminal_id` já confirmado.
+
+**O evento tem consumidor.** Diferente do build 1.5.0 auditado, `lord-agent-spawn-v1` é
+escutado por `useAgentSpawnListener` (`src/hooks/useAgentSpawnListener.ts:134-179`),
+montado incondicionalmente em `src/App.tsx:207`. O fluxo: resolve o alvo
+(`resolveSpawnTarget`, puro), reivindica, cria a aba com o prompt como `initialInput`
+(`buildSpawnTerminalArgs`, `:42-57`) e reporta de volta ao registry. **Os dois Sandbox/Canvas
+antigos não participam mais deste caminho** — o evento v1 é exclusivo justamente para não
+acordá-los.
+
+> **Atenção a quem adicionar provider:** há **duas** allowlists independentes —
+> `agent_events.rs:250-259` (Rust) e `SPAWN_PROVIDERS` em
+> `src/hooks/resolveSpawnTarget.ts:7-13` (TypeScript). Mudar só uma faz o `/spawn`
+> responder e o frontend rejeitar com `invalid_provider`.
+
+**Obtenção do token continua interna ao app.** Ele vive só em memória e sai por dois
+caminhos: o comando Tauri `agent_hooks_token` (`src-tauri/src/agent_events.rs:133-136`,
+registrado em `src-tauri/src/lib.rs:245`), chamável só pelo frontend; e arquivos escritos
+em disco — `lord-agent-listener.json` no diretório do perfil ativo (`:93-106`, escrito no
+boot do listener) e `%TEMP%\alethe-agent-hooks.json` via `agent_hooks_settings_path`
+(`:142-182`). O discovery do perfil é o caminho pretendido para um cliente externo, e é
+escrito sem depender de Canvas ou Sandbox.
 
 ### 3.2 `write_pty` / `initialInput` — escrever prompt visível
 

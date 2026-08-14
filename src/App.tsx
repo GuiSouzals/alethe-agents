@@ -185,7 +185,6 @@ export default function App() {
   const rightSidebarVisible = useProjectsStore((s) => s.preferences.rightSidebarVisible)
   const leftSidebarWidth = useProjectsStore((s) => s.preferences.leftSidebarWidth)
   const rightSidebarWidth = useProjectsStore((s) => s.preferences.rightSidebarWidth)
-  const todoEnabled = useProjectsStore((s) => s.preferences.enabledFeatures.todos)
   const setPreferences = useProjectsStore((s) => s.setPreferences)
   // Keep panel defaults stable while dragging. Updating defaultSize on every
   // resize event can make react-resizable-panels rebuild the layout mid-drag.
@@ -282,7 +281,7 @@ export default function App() {
     const element = rightPanelElementRef.current
     if (element) element.style.transition = 'flex-grow 180ms ease, flex-basis 180ms ease'
     const frame = window.requestAnimationFrame(() => {
-      if (todoEnabled && rightSidebarVisible) rightPanelRef.current?.expand()
+      if (rightSidebarVisible) rightPanelRef.current?.expand()
       else rightPanelRef.current?.collapse()
     })
     const timer = window.setTimeout(() => {
@@ -293,7 +292,7 @@ export default function App() {
       window.clearTimeout(timer)
       if (element) element.style.transition = ''
     }
-  }, [hydrated, rightPanelRef, rightSidebarVisible, todoEnabled])
+  }, [hydrated, rightPanelRef, rightSidebarVisible])
 
   useEffect(() => {
     if (!hydrated) return
@@ -428,7 +427,9 @@ export default function App() {
             </main>
           </Panel>
 
-          {todoEnabled ? (
+          {/* Lord: o painel direito deixou de depender da feature de todos — a aba de
+              agentes despachados mora nele e precisa existir com todos desligado. */}
+          {(
             <>
               <Separator
                 className={`${styles.shellSeparator} ${rightSidebarVisible ? '' : styles.shellSeparatorHidden}`}
@@ -464,7 +465,7 @@ export default function App() {
                 </div>
               </Panel>
             </>
-          ) : null}
+          )}
         </PanelGroup>
       </div>
       <FocusOverlay />

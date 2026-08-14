@@ -87,6 +87,9 @@ export function normalizePreferences(raw: LegacyPreferences | undefined): Prefer
     // Lord F3: Ausência ou valor desconhecido volta ao modo dev; animated fica apenas preparado.
     orchestrationPresentation:
       preferences.orchestrationPresentation === 'animated' ? 'animated' : 'dev',
+    // Lord: só um `true` explícito no arquivo dispensa a confirmação humana da
+    // ordem externa; ausência, `undefined` ou lixo caem no portão.
+    externalSpawnAutoRun: raw?.externalSpawnAutoRun === true,
     resourcePolicy: {
       // Older installs inherited Smart LRU without an explicit choice. Migrate
       // them to monitor-only so an update never starts terminating PTYs.

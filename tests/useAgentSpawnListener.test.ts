@@ -152,6 +152,14 @@ describe('executeAgentSpawn', () => {
     })
   })
 
+  // Lord F1: o provider `cursor` precisa atravessar a allowlist do frontend até o tipo da aba.
+  it('builds a cursor tab when the spawn asks for the cursor provider', () => {
+    const decision = resolveSpawnTarget(payload({ provider: 'cursor' }), projects, true)
+    if (decision.status !== 'matched') throw new Error('fixture must match')
+
+    expect(buildSpawnTerminalArgs(decision).firstTab.type).toBe('cursor')
+  })
+
   it('does not create another terminal when the same request is delivered twice', async () => {
     let available = true
     const claim = vi.fn(async () => {

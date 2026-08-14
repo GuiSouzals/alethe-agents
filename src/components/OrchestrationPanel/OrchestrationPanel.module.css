@@ -1,0 +1,182 @@
+/* Lord: painel global de execuções. Sem cor de aprovação — só estado de processo. */
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.headerTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--fg-muted);
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.empty {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.run {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  font-size: 10px;
+  color: var(--fg-muted);
+}
+
+/* Estados terminais ganham contraste de borda, não cor semântica de sucesso. */
+.run[data-status='failed'],
+.run[data-status='revoked'] {
+  border-color: var(--border-strong);
+}
+
+.runHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.provider {
+  color: var(--fg);
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source,
+.state {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--fg);
+  text-transform: lowercase;
+}
+
+.state {
+  margin-left: auto;
+}
+
+.origin {
+  margin-top: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jobId {
+  margin-top: 2px;
+  color: var(--fg-faint);
+  font: 9px/1.4 var(--font-mono);
+}
+
+.failure {
+  margin-top: 4px;
+  padding: 4px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--fg);
+  font: 9px/1.4 var(--font-mono);
+  word-break: break-word;
+}
+
+.open {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  color: var(--fg-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.open:hover {
+  color: var(--fg);
+  background: var(--panel-hover);
+  border-color: var(--border-strong);
+}
+
+.noTerminal {
+  margin-top: 6px;
+  color: var(--fg-faint);
+}
+
+.footer {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--fg-faint);
+  font-size: 9px;
+}
+
+.autoRun {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.autoRun input {
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.autoRunHint {
+  margin: 4px 0 0;
+  color: var(--fg-muted);
+}
+
+.ephemeral {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}

@@ -2,10 +2,13 @@ import { sameCwd } from '../lib/paths'
 import type { AgentType, Project } from '../lib/types'
 
 // Lord D1: O chassi recebe o executor pronto e valida apenas o contrato de execução.
+// Lord F1: espelha a allowlist do Rust em `agent_events.rs::parse_spawn_request`;
+// as duas são independentes e precisam mudar juntas.
 const SPAWN_PROVIDERS = [
   'shell',
   'claude',
   'codex',
+  'cursor',
   'opencode',
 ] as const satisfies readonly AgentType[]
 

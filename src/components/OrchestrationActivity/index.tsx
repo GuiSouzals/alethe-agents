@@ -1,21 +1,10 @@
 import { Eye, GitBranch, TerminalSquare } from 'lucide-react'
 
 import { useT } from '../../lib/i18n'
+import { ORCHESTRATION_STATUS_KEYS as STATUS_KEYS } from '../../lib/orchestration'
 import type { OrchestrationRun } from '../../lib/orchestration'
 import type { OrchestrationMode } from '../../lib/types'
 import styles from './OrchestrationActivity.module.css'
-
-const STATUS_KEYS = {
-  requested: 'orchestration.state.requested',
-  accepted: 'orchestration.state.accepted',
-  terminal_created: 'orchestration.state.terminalCreated',
-  pty_started: 'orchestration.state.running',
-  tool_started: 'orchestration.state.toolRunning',
-  tool_finished: 'orchestration.state.toolFinished',
-  process_exited: 'orchestration.state.ended',
-  failed: 'orchestration.state.failed',
-  revoked: 'orchestration.state.revoked',
-} as const
 
 export type OrchestrationActivityProps = {
   mode: OrchestrationMode

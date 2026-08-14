@@ -626,6 +626,7 @@ export const ptBR: Record<MessageKey, string> = {
   'rightSidebar.navigation': 'Navegação da sidebar direita',
   'rightSidebar.todoTab': 'Todo',
   'rightSidebar.markdownTab': 'Markdown',
+  'rightSidebar.agentsTab': 'Agentes',
   'rightSidebar.markdownEmptyTitle': 'Nenhum Markdown selecionado',
   'rightSidebar.markdownEmptyDesc':
     'Abra um arquivo Markdown na sidebar de projetos para visualizá-lo aqui.',
@@ -1100,6 +1101,32 @@ export const ptBR: Record<MessageKey, string> = {
   'orchestration.internal.readOnly': 'Subagente interno — visualização somente leitura',
   'orchestration.internal.noLiveOutput': 'Este provider não emite saída ao vivo deste subagente.',
   'orchestration.internal.noTranscript': 'Este provider não emitiu um transcript final.',
+  // Lord: lista global de agentes despachados. Vocabulário de processo — nunca de aprovação.
+  'orchestration.panel.title': 'Agentes despachados',
+  'orchestration.panel.emptyTitle': 'Nenhum agente despachado',
+  'orchestration.panel.emptyDesc':
+    'Agentes despachados por ordem externa ou por subagente interno aparecem aqui enquanto o app estiver aberto.',
+  'orchestration.panel.ephemeral': 'Lista em memória: zera quando o app reinicia.',
+  'orchestration.panel.external': 'ordem externa',
+  'orchestration.panel.internal': 'subagente interno',
+  'orchestration.panel.open': 'Abrir terminal',
+  'orchestration.panel.noTerminal': 'Nenhum terminal foi criado para esta execução',
+  'orchestration.panel.count': '{count} nesta sessão',
+  'orchestration.panel.awaiting': 'aguardando sua confirmação',
+  'orchestration.toast.title': '{provider} despachado',
+  'orchestration.toast.body': 'Ordem externa vinda de {origin}.',
+  // Lord: portão das ordens externas. Nada chega a um CLI pago antes de um clique explícito.
+  'orchestration.pending.title': 'Ordem externa — nada foi enviado ainda',
+  'orchestration.pending.body':
+    'Um processo fora do app pediu que o {provider} executasse o prompt abaixo. Ele não foi enviado.',
+  'orchestration.pending.send': 'Enviar para o {provider}',
+  'orchestration.pending.discard': 'Descartar',
+  'orchestration.pending.discarded': 'Prompt descartado. Nada foi enviado.',
+  'orchestration.pending.banner':
+    'Ordem externa vinda de {origin} aguarda sua confirmação. Nada foi digitado neste terminal.',
+  'orchestration.pending.autoRun': 'Executar ordens externas sem perguntar',
+  'orchestration.pending.autoRunHint':
+    'Ligado, um POST /spawn começa a gastar no provider imediatamente, sem etapa de confirmação.',
   'ui.terminal.responseReady': 'Resposta pronta',
   'ui.terminal.working': 'Terminal em ação',
   'ui.terminal.noCwdAvailable': 'Sem cwd disponível pra abrir no {label}.',

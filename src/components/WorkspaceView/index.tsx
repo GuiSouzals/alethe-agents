@@ -570,7 +570,8 @@ function NoWorkspace({
   )
   const quickAgents = useMemo(
     () =>
-      (['claude', 'codex', 'antigravity', 'opencode', 'shell'] as AgentType[]).filter(
+      // Lord F1: mesma ordem canônica de `ALL_AGENT_TYPES` (src/lib/types.ts).
+      (['claude', 'codex', 'antigravity', 'cursor', 'opencode', 'shell'] as AgentType[]).filter(
         (agent) => enabledAgents[agent],
       ),
     [enabledAgents],

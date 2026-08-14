@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { useEffect } from 'react'
 
+import { getLocale, translate } from '../lib/i18n'
 import { AGENT_TYPE_LABELS } from '../lib/types'
 import { effectiveOrchestrationPresentation, type OrchestrationEvent } from '../lib/orchestration'
 import { useOrchestrationStore } from '../stores/orchestrationStore'
@@ -32,6 +33,7 @@ type SpawnExecutorDependencies = {
   ) => Promise<{ id: string }>
   focusTerminal: (projectId: string, terminalId: string) => void
   recordEvent?: (event: OrchestrationEvent) => void
+  notifyDispatched?: (decision: Extract<SpawnResolution, { status: 'matched' }>) => void
   shouldFocusTerminal?: (decision: Extract<SpawnResolution, { status: 'matched' }>) => boolean
   onError?: (error: unknown) => void
 }
@@ -120,6 +122,7 @@ export async function executeAgentSpawn(
       tabId: 'activeTabId' in terminal ? String(terminal.activeTabId) : undefined,
     }),
   )
+  dependencies.notifyDispatched?.(decision)
   if (dependencies.shouldFocusTerminal?.(decision) ?? true) {
     dependencies.focusTerminal(decision.projectId, terminal.id)
   }
@@ -159,6 +162,18 @@ export function useAgentSpawnListener(hydrated: boolean) {
             .claimAutoFocus(
               decision.parentTerminalId ?? `${decision.origin}:${decision.projectId}`,
             ),
+        // Lord: a aba pode nascer fora da vista (outro projeto, grupo recolhido, ou com o
+        // auto-foco perdido no debounce). O aviso é o único sinal de que algo externo agiu.
+        notifyDispatched: (decision) => {
+          const locale = getLocale()
+          useUiStore.getState().pushToast({
+            title: translate(locale, 'orchestration.toast.title', {
+              provider: AGENT_TYPE_LABELS[decision.provider],
+            }),
+            body: translate(locale, 'orchestration.toast.body', { origin: decision.origin }),
+            agent: decision.provider,
+          })
+        },
         focusTerminal: (projectId, terminalId) => {
           const projects = useProjectsStore.getState()
           const ui = useUiStore.getState()

@@ -303,6 +303,7 @@ pub fn run() {
             profiles::rename_profile,
             profiles::delete_profile,
             cli_resolver::find_cli_launcher,
+            cli_resolver::get_cursor_cli_status,
             cli_launch::cli_take_pending_open,
             cli_shim::cli_shim_status,
             cli_shim::cli_shim_install,

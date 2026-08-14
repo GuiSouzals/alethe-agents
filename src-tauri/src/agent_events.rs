@@ -245,9 +245,11 @@ fn parse_spawn_request(body: &str) -> Result<SpawnRequestV1, SpawnResponseV1> {
             "invalid_request_id",
         ));
     }
+    // Lord F1: `cursor` entra aqui e em `SPAWN_PROVIDERS` (frontend); as duas allowlists
+    // são independentes e uma sozinha faz o /spawn aceitar e a aba nunca nascer.
     if !matches!(
         request.provider.as_str(),
-        "shell" | "claude" | "codex" | "opencode"
+        "shell" | "claude" | "codex" | "cursor" | "opencode"
     ) {
         return Err(SpawnResponseV1::rejected(
             request.request_id,
@@ -503,6 +505,45 @@ mod tests {
         assert_eq!(response.status, SpawnStatus::Rejected);
         assert_eq!(response.reason.as_deref(), Some("invalid_request"));
         assert!(response.job_id.starts_with("spawn-job-"));
+    }
+
+    // Lord F1: o Cursor precisa passar pela mesma allowlist que os demais executores.
+    #[test]
+    fn accepts_cursor_as_a_v1_provider() {
+        let request = parse_spawn_request(
+            r#"{
+                "version": 1,
+                "request_id": "request-cursor",
+                "provider": "cursor",
+                "task": "Implement the slice",
+                "cwd": "C:/work/project",
+                "origin": "lord"
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(request.request_id, "request-cursor");
+        assert_eq!(request.provider, "cursor");
+    }
+
+    #[test]
+    fn rejects_an_unknown_provider_with_invalid_provider() {
+        let response = parse_spawn_request(
+            r#"{
+                "version": 1,
+                "request_id": "request-unknown",
+                "provider": "gemini",
+                "task": "Implement the slice",
+                "cwd": "C:/work/project",
+                "origin": "lord"
+            }"#,
+        )
+        .unwrap_err();
+
+        assert_eq!(response.status, SpawnStatus::Rejected);
+        assert_eq!(response.reason.as_deref(), Some("invalid_provider"));
+        assert_eq!(response.request_id, "request-unknown");
+        assert_eq!(response.provider, "gemini");
     }
 
     #[test]

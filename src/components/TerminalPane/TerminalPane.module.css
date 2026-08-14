@@ -447,3 +447,100 @@
   background: var(--panel-hover);
   border-color: var(--accent);
 }
+
+/* Lord: portão da ordem externa. Sem cor de aprovação/sucesso — é só um passo
+   de processo que segura o prompt até um clique humano. */
+.spawnGate {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-strong);
+  border-left: 2px solid var(--status-waiting);
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.spawnGateTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.spawnGateBody {
+  line-height: 1.45;
+}
+
+.spawnGateOrigin {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-faint);
+}
+
+.spawnGatePrompt {
+  margin: 0;
+  max-height: 168px;
+  overflow: auto;
+  padding: 7px 9px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.spawnGateActions {
+  display: flex;
+  gap: 6px;
+}
+
+.spawnGateSend,
+.spawnGateDiscard {
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.1s ease,
+    border-color 0.1s ease,
+    color 0.1s ease;
+}
+
+.spawnGateSend {
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+}
+.spawnGateSend:hover {
+  background: var(--panel-hover);
+  border-color: var(--accent);
+}
+
+.spawnGateDiscard {
+  color: var(--fg-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+}
+.spawnGateDiscard:hover {
+  color: var(--fg);
+  background: var(--panel-hover);
+  border-color: var(--border-strong);
+}
+
+.spawnGateDiscarded {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-faint);
+  font-size: 11px;
+}

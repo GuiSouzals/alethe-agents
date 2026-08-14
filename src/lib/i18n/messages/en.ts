@@ -619,6 +619,7 @@ export const en = {
   'rightSidebar.navigation': 'Right sidebar navigation',
   'rightSidebar.todoTab': 'Todo',
   'rightSidebar.markdownTab': 'Markdown',
+  'rightSidebar.agentsTab': 'Agents',
   'rightSidebar.markdownEmptyTitle': 'No Markdown selected',
   'rightSidebar.markdownEmptyDesc':
     'Open a Markdown file from the project sidebar to preview it here.',
@@ -1088,6 +1089,32 @@ export const en = {
   'orchestration.internal.noLiveOutput':
     'This provider does not emit live output for this subagent.',
   'orchestration.internal.noTranscript': 'This provider did not emit a final transcript.',
+  // Lord: global list of dispatched agents. Process vocabulary only — never approval.
+  'orchestration.panel.title': 'Dispatched agents',
+  'orchestration.panel.emptyTitle': 'No agent dispatched',
+  'orchestration.panel.emptyDesc':
+    'Agents dispatched by an external order or by an internal subagent show up here while the app is open.',
+  'orchestration.panel.ephemeral': 'In-memory list: it resets when the app restarts.',
+  'orchestration.panel.external': 'external order',
+  'orchestration.panel.internal': 'internal subagent',
+  'orchestration.panel.open': 'Open terminal',
+  'orchestration.panel.noTerminal': 'No terminal was created for this run',
+  'orchestration.panel.count': '{count} in this session',
+  'orchestration.panel.awaiting': 'awaiting your confirmation',
+  'orchestration.toast.title': '{provider} dispatched',
+  'orchestration.toast.body': 'External order from {origin}.',
+  // Lord: gate for external orders. Nothing reaches a paid CLI before an explicit click.
+  'orchestration.pending.title': 'External order — nothing sent yet',
+  'orchestration.pending.body':
+    'A process outside the app asked {provider} to run the prompt below. It was not sent.',
+  'orchestration.pending.send': 'Send to {provider}',
+  'orchestration.pending.discard': 'Discard',
+  'orchestration.pending.discarded': 'Prompt discarded. Nothing was sent.',
+  'orchestration.pending.banner':
+    'External order from {origin} is waiting for your confirmation. Nothing was typed into this terminal.',
+  'orchestration.pending.autoRun': 'Run external orders without asking',
+  'orchestration.pending.autoRunHint':
+    'When on, a POST /spawn starts spending on the provider immediately, with no confirmation step.',
   'ui.terminal.responseReady': 'Response ready',
   'ui.terminal.working': 'Terminal is working',
   'ui.terminal.noCwdAvailable': 'No cwd available to open in {label}.',

@@ -27,6 +27,18 @@ export type XTermViewProps = {
   extraArgs?: string[]
   /** Prompt opcional enviado uma única vez após o boot do processo. */
   initialInput?: string
+  /**
+   * Lord: portão do primeiro envio do `initialInput`.
+   * - `auto` (default): comportamento histórico — espera o PTY silenciar e
+   *   envia sozinho. É o caminho das ações diretas do usuário.
+   * - `hold`: segura indefinidamente, sem escrever nada no PTY.
+   * - `send`: libera o envio.
+   * - `discard`: encerra sem escrever byte nenhum e chama
+   *   `onInitialInputDiscarded`.
+   */
+  initialInputGate?: 'auto' | 'hold' | 'send' | 'discard'
+  /** Origem declarada da ordem externa — só aparece no banner local do gate. */
+  initialInputOrigin?: string
   /** Identidade persistida da conversa deste pane. */
   sessionId?: string
   /** Identidade estável da sub-tab, independente das trocas de PTY. */
@@ -59,6 +71,8 @@ export type XTermViewProps = {
   onSpawned?: (id: string) => void
   onSessionId?: (id: string | undefined) => void
   onInitialInputSent?: () => void
+  /** Lord: o portão descartou o prompt — nada foi escrito no PTY. */
+  onInitialInputDiscarded?: () => void
   onExit?: (code: number | null) => void
   onAgentComplete?: () => void
 }
@@ -75,6 +89,8 @@ export function XTermView({
   cwd,
   extraArgs,
   initialInput,
+  initialInputGate = 'auto',
+  initialInputOrigin,
   sessionId,
   sessionKey,
   env,
@@ -90,6 +106,7 @@ export function XTermView({
   onSpawned,
   onSessionId,
   onInitialInputSent,
+  onInitialInputDiscarded,
   onExit,
   onAgentComplete,
 }: XTermViewProps) {
@@ -109,12 +126,20 @@ export function XTermView({
   const onSpawnedRef = useRef(onSpawned)
   const onSessionIdRef = useRef(onSessionId)
   const onInitialInputSentRef = useRef(onInitialInputSent)
+  // Lord: o efeito do PTY só depende de [sessionPersistenceKey, retryKey], então
+  // o portão precisa chegar lá por ref — mudança de prop nunca remonta a sessão.
+  const initialInputGateRef = useRef(initialInputGate)
+  const initialInputOriginRef = useRef(initialInputOrigin)
+  const onInitialInputDiscardedRef = useRef(onInitialInputDiscarded)
   const onExitRef = useRef(onExit)
   const onAgentCompleteRef = useRef(onAgentComplete)
   useEffect(() => {
     onSpawnedRef.current = onSpawned
     onSessionIdRef.current = onSessionId
     onInitialInputSentRef.current = onInitialInputSent
+    initialInputGateRef.current = initialInputGate
+    initialInputOriginRef.current = initialInputOrigin
+    onInitialInputDiscardedRef.current = onInitialInputDiscarded
     onExitRef.current = onExit
     onAgentCompleteRef.current = onAgentComplete
   })
@@ -322,6 +347,9 @@ export function XTermView({
     onSpawnedRef,
     onSessionIdRef,
     onInitialInputSentRef,
+    initialInputGateRef,
+    initialInputOriginRef,
+    onInitialInputDiscardedRef,
     onExitRef,
     onAgentCompleteRef,
     setBootPhase,

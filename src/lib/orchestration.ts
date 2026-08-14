@@ -73,6 +73,20 @@ export type OrchestrationRun = {
   liveOutput: OrchestrationLiveOutput
 }
 
+// Lord: fonte única do rótulo de cada estado. Havia uma cópia local no componente de
+// atividade; um segundo consumidor (o painel global) faria as duas divergirem.
+export const ORCHESTRATION_STATUS_KEYS = {
+  requested: 'orchestration.state.requested',
+  accepted: 'orchestration.state.accepted',
+  terminal_created: 'orchestration.state.terminalCreated',
+  pty_started: 'orchestration.state.running',
+  tool_started: 'orchestration.state.toolRunning',
+  tool_finished: 'orchestration.state.toolFinished',
+  process_exited: 'orchestration.state.ended',
+  failed: 'orchestration.state.failed',
+  revoked: 'orchestration.state.revoked',
+} as const
+
 export type OrchestrationProjection = {
   runsById: Record<string, OrchestrationRun>
   runOrder: string[]

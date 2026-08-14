@@ -5,6 +5,7 @@ import {
   GitBranch,
   ListTodo,
   PanelRightClose,
+  Radar,
   RefreshCw,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -17,6 +18,7 @@ import { useUiStore } from '../../stores/uiStore'
 import { MarkdownRenderer } from '../MarkdownPane/MarkdownRenderer'
 import { EmptyState } from '../EmptyState'
 import { GitControl } from '../ProjectSidebar/GitControl'
+import { OrchestrationPanel } from '../OrchestrationPanel'
 import { TodoSidebar } from '../TodoSidebar'
 import styles from './RightSidebar.module.css'
 
@@ -24,11 +26,16 @@ const markdownScrollPositions = new Map<string, number>()
 
 export function RightSidebar() {
   const t = useT()
-  const mode = useUiStore((state) => state.rightSidebarMode)
+  const storedMode = useUiStore((state) => state.rightSidebarMode)
   const setMode = useUiStore((state) => state.showTodoSidebar)
   const openMarkdown = useUiStore((state) => state.showMarkdownSidebar)
   const showGit = useUiStore((state) => state.showGitSidebar)
+  const showAgents = useUiStore((state) => state.showAgentsSidebar)
   const preferences = useProjectsStore((state) => state.preferences)
+  const todoEnabled = preferences.enabledFeatures.todos
+  // Lord: o painel direito passou a existir sem a feature de todos. Se o modo salvo for
+  // 'todo' e a feature estiver desligada, cai em 'agents' em vez de renderizar vazio.
+  const mode = storedMode === 'todo' && !todoEnabled ? 'agents' : storedMode
   const activeProjectId = useProjectsStore((state) => state.activeProjectId)
   const projects = useProjectsStore((state) => state.projects)
   const activeProject = projects.find((project) => project.id === activeProjectId) ?? projects[0]
@@ -43,16 +50,29 @@ export function RightSidebar() {
   return (
     <aside className={styles.sidebar} aria-label={t('rightSidebar.navigation')}>
       <div className={styles.sidebarTabs} role="tablist" aria-label={t('rightSidebar.navigation')}>
+        {todoEnabled ? (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'todo'}
+            className={`${styles.sidebarTab} ${mode === 'todo' ? styles.sidebarTabActive : ''}`}
+            onClick={setMode}
+            title={t('todo.title')}
+          >
+            <ListTodo size={14} />
+            <span>{t('rightSidebar.todoTab')}</span>
+          </button>
+        ) : null}
         <button
           type="button"
           role="tab"
-          aria-selected={mode === 'todo'}
-          className={`${styles.sidebarTab} ${mode === 'todo' ? styles.sidebarTabActive : ''}`}
-          onClick={setMode}
-          title={t('todo.title')}
+          aria-selected={mode === 'agents'}
+          className={`${styles.sidebarTab} ${mode === 'agents' ? styles.sidebarTabActive : ''}`}
+          onClick={showAgents}
+          title={t('orchestration.panel.title')}
         >
-          <ListTodo size={14} />
-          <span>{t('rightSidebar.todoTab')}</span>
+          <Radar size={14} />
+          <span>{t('rightSidebar.agentsTab')}</span>
         </button>
         <button
           type="button"
@@ -82,6 +102,7 @@ export function RightSidebar() {
       <div className={styles.tabContent}>
         {mode === 'markdown' ? <MarkdownSidebarViewer /> : null}
         {mode === 'todo' ? <TodoSidebar /> : null}
+        {mode === 'agents' ? <OrchestrationPanel /> : null}
         {mode === 'git' ? (
           <GitSidebarContent
             activeProject={activeProject}

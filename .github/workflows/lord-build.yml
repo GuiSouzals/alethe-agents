@@ -4,6 +4,44 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Fronteira executavel: a maquina de desenvolvimento nao tem cargo, entao o unico
+  # lugar onde o teste de Rust roda de verdade e aqui. Job separado do build para
+  # falhar rapido e em paralelo (ADR-0011: o que e verificavel por script nao vira julgamento).
+  test:
+    name: Tests (Rust + TypeScript)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund   # mesmo contorno do job de build
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests (vitest)
+        run: npm test
+
+      - name: Unit tests (cargo)
+        run: npm run test:rust
+
   build:
     name: Build Windows installer
     runs-on: windows-latest

@@ -23,11 +23,13 @@ import { useTerminalsStore } from '../../stores/terminalsStore'
 import { useUiStore } from '../../stores/uiStore'
 import {
   agentCliCommand,
+  AGENT_TYPE_LABELS,
   type Terminal as TerminalEntry,
   type SubTab,
   type Theme,
   type AgentType,
 } from '../../lib/types'
+import { requiresSpawnConfirmation } from '../../lib/spawnConfirmation'
 import { findRunForSubTab, type OrchestrationEvent } from '../../lib/orchestration'
 import { getPtyCwd, openInVscode, restartPty, snapshotCodexSessions } from '../../lib/tauri'
 import { AgentIcon, VSCodeIcon } from '../icons/AgentIcons'
@@ -188,6 +190,27 @@ export const TerminalPane = memo(function TerminalPane({
     () => terminal.tabs.find((tab) => tab.id === terminal.activeTabId) ?? terminal.tabs[0],
     [terminal.tabs, terminal.activeTabId],
   )
+
+  // Lord: portão de confirmação da ordem externa. `null` = ainda segurando; a
+  // decisão do usuário é fixada aqui e passa a mandar no gate, porque o clique
+  // limpa o `initialInput` do SubTab e o cálculo de "precisa confirmar?"
+  // deixaria de valer logo em seguida.
+  const [spawnGateDecision, setSpawnGateDecision] = useState<'send' | 'discard' | null>(null)
+  const activeTabId = activeTab?.id
+  useEffect(() => {
+    setSpawnGateDecision(null)
+  }, [activeTabId])
+
+  const externalSpawnAutoRun = useProjectsStore(
+    (s) => s.preferences.externalSpawnAutoRun ?? false,
+  )
+  const pendingSpawnPrompt = activeTab?.initialInput?.trim() ?? ''
+  const needsSpawnConfirmation =
+    pendingSpawnPrompt.length > 0 && requiresSpawnConfirmation(activeTab, externalSpawnAutoRun)
+  const showSpawnGate = needsSpawnConfirmation && spawnGateDecision === null
+  const initialInputGate: 'auto' | 'hold' | 'send' | 'discard' =
+    spawnGateDecision ?? (needsSpawnConfirmation ? 'hold' : 'auto')
+  const spawnGateProviderLabel = activeTab ? AGENT_TYPE_LABELS[activeTab.type] : ''
 
   const orchestrationRunsById = useOrchestrationStore((s) => s.runsById)
   const orchestrationRunOrder = useOrchestrationStore((s) => s.runOrder)
@@ -484,6 +507,46 @@ export const TerminalPane = memo(function TerminalPane({
               onFocusTerminal={focusOrchestrationTerminal}
             />
           ) : null}
+          {activeTab && showSpawnGate ? (
+            <div
+              className={styles.spawnGate}
+              role="group"
+              aria-label={t('orchestration.pending.title')}
+            >
+              <div className={styles.spawnGateTitle}>{t('orchestration.pending.title')}</div>
+              <div className={styles.spawnGateBody}>
+                {t('orchestration.pending.body', { provider: spawnGateProviderLabel })}
+              </div>
+              <div className={styles.spawnGateOrigin}>
+                {t('orchestration.origin', { origin: activeTab.orchestrationOrigin ?? '—' })}
+              </div>
+              <pre className={styles.spawnGatePrompt}>{pendingSpawnPrompt}</pre>
+              <div className={styles.spawnGateActions}>
+                <button
+                  type="button"
+                  className={styles.spawnGateSend}
+                  onClick={() => setSpawnGateDecision('send')}
+                >
+                  {t('orchestration.pending.send', { provider: spawnGateProviderLabel })}
+                </button>
+                <button
+                  type="button"
+                  className={styles.spawnGateDiscard}
+                  onClick={() => {
+                    setSpawnGateDecision('discard')
+                    setSubTabInitialInput(projectId, terminal.id, activeTab.id, undefined)
+                  }}
+                >
+                  {t('orchestration.pending.discard')}
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {spawnGateDecision === 'discard' ? (
+            <div className={styles.spawnGateDiscarded} role="status">
+              {t('orchestration.pending.discarded')}
+            </div>
+          ) : null}
           <div className={styles.terminalArea}>
             {terminal.disabled ? (
               <DisabledOverlay
@@ -535,6 +598,8 @@ export const TerminalPane = memo(function TerminalPane({
                     cwd={activeTab.cwd || null}
                     extraArgs={activeTab.extraArgs}
                     initialInput={activeTab.initialInput}
+                    initialInputGate={initialInputGate}
+                    initialInputOrigin={activeTab.orchestrationOrigin}
                     runtimeProfile={activeTab.runtimeProfile}
                     sessionId={activeTab.sessionId}
                     graphifyRepo={graphifyRepo}
@@ -553,6 +618,9 @@ export const TerminalPane = memo(function TerminalPane({
                       }
                     }}
                     onInitialInputSent={() =>
+                      setSubTabInitialInput(projectId, terminal.id, activeTab.id, undefined)
+                    }
+                    onInitialInputDiscarded={() =>
                       setSubTabInitialInput(projectId, terminal.id, activeTab.id, undefined)
                     }
                     onAgentComplete={() =>

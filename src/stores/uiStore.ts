@@ -40,7 +40,8 @@ type ModalKind =
   | null
 
 export type ActiveView = 'home' | 'workspace' | 'agentCanvas' | 'agentSandbox'
-export type RightSidebarMode = 'todo' | 'markdown' | 'git'
+// Lord: 'agents' e a unica aba do painel direito que nao depende da feature de todos.
+export type RightSidebarMode = 'todo' | 'markdown' | 'git' | 'agents'
 
 export type MemorySample = MemoryStats & {
   ts: number
@@ -120,6 +121,7 @@ type UiState = {
   showMarkdownSidebar: () => void
   showTodoSidebar: () => void
   showGitSidebar: () => void
+  showAgentsSidebar: () => void
   setAgentCanvasSession: (session: { folder: string; ptyId: string } | null) => void
   setAgentCanvasBudget: (usd: number | null) => void
   pushToast: (toast: {
@@ -210,6 +212,7 @@ export const useUiStore = create<UiState>((set) => ({
   showMarkdownSidebar: () => set({ rightSidebarMode: 'markdown' }),
   showTodoSidebar: () => set({ rightSidebarMode: 'todo', rightSidebarMarkdown: null }),
   showGitSidebar: () => set({ rightSidebarMode: 'git' }),
+  showAgentsSidebar: () => set({ rightSidebarMode: 'agents', rightSidebarMarkdown: null }),
   setAgentCanvasSession: (session) => set({ agentCanvasSession: session }),
   setAgentCanvasBudget: (usd) => set({ agentCanvasBudgetUsd: usd }),
   pushToast: ({ title, body, agent, silent }) =>

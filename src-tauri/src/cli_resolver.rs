@@ -801,11 +801,8 @@ pub async fn discover_provider_models(provider: String) -> Result<Vec<ModelOptio
 
 /// Lord F1: status honesto do Cursor CLI via `status --format json` documentado.
 /// Nunca devolve percentual, franquia ou custo — isso vive no dashboard web.
-///
-/// TODO(Lord F1): registrar `get_cursor_cli_status` em `src-tauri/src/lib.rs`
-/// (`generate_handler!`) — este arquivo está bloqueado porque outro agente
-/// corrige o protocolo `/spawn` em paralelo. Até lá o frontend degrada para
-/// `find_cli_launcher` (instalado/ausente, sem auth).
+/// Registrado no `generate_handler!` de `src-tauri/src/lib.rs`; sem esse registro
+/// o `invoke` do frontend falha sempre e o card degrada para instalado/ausente.
 #[tauri::command]
 pub async fn get_cursor_cli_status() -> CursorCliStatus {
     tokio::task::spawn_blocking(get_cursor_cli_status_inner)

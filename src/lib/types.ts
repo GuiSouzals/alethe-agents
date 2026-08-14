@@ -438,6 +438,12 @@ export type Preferences = {
   spawnConcurrency: number
   /** Lord F3: Apresentação preferida; `dev` é o default e único modo habilitado. */
   orchestrationPresentation: OrchestrationPresentation
+  /**
+   * Lord: ordem externa (`POST /spawn`) escreve o prompt no CLI pago sem passar
+   * pelo portão de confirmação humana. Default false — nada chega a um provider
+   * cobrado antes de um clique explícito.
+   */
+  externalSpawnAutoRun: boolean
   /** Limites de RAM e política de estacionamento automático dos runtimes. */
   resourcePolicy: ResourcePolicyPreferences
   /** v2.2 — grid layout custom da workspace inteira (cross-grupo). */
@@ -561,6 +567,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   spawnConcurrency: 3,
   // Lord F3: PTY real e aberto é a experiência padrão de orquestração.
   orchestrationPresentation: 'dev',
+  // Lord: ordem externa espera confirmação humana antes de gastar no CLI pago.
+  externalSpawnAutoRun: false,
   resourcePolicy: {
     mode: 'manual',
     automaticParkingOptIn: false,

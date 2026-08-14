@@ -106,6 +106,13 @@ let aiMemoryMissingWarned = false
 
 type BootPhase = 'preparing' | 'queued' | 'spawning' | 'attaching' | 'ready'
 
+/** Lord: estados do portão de confirmação do primeiro envio. */
+export type InitialInputGate = 'auto' | 'hold' | 'send' | 'discard'
+
+// Lord: intervalo de sondagem do portão enquanto ele segura o prompt. Mesmo
+// passo do laço de espera-por-silêncio logo abaixo.
+const INITIAL_INPUT_GATE_POLL_MS = 250
+
 /**
  * Sessão do terminal xterm + PTY. É o coração do XTermView: cria o terminal,
  * conecta o streaming de dados/exit, resize, buffer de escrita, links e
@@ -162,6 +169,16 @@ export function useXtermSession(params: {
   onSpawnedRef: MutableRefObject<((id: string) => void) | undefined>
   onSessionIdRef: MutableRefObject<((id: string | undefined) => void) | undefined>
   onInitialInputSentRef: MutableRefObject<(() => void) | undefined>
+  /**
+   * Lord: portão do primeiro envio. `auto` mantém o comportamento histórico
+   * (espera silêncio e envia sozinho). `hold` segura indefinidamente sem
+   * escrever nada no PTY e sem contar deadline. `send` libera o envio.
+   * `discard` encerra sem escrever byte nenhum.
+   */
+  initialInputGateRef: MutableRefObject<InitialInputGate | undefined>
+  /** Origem declarada da ordem externa, só para o banner local. */
+  initialInputOriginRef: MutableRefObject<string | undefined>
+  onInitialInputDiscardedRef: MutableRefObject<(() => void) | undefined>
   onExitRef: MutableRefObject<((code: number | null) => void) | undefined>
   onAgentCompleteRef: MutableRefObject<(() => void) | undefined>
   setBootPhase: Dispatch<SetStateAction<BootPhase>>
@@ -202,6 +219,9 @@ export function useXtermSession(params: {
     onSpawnedRef,
     onSessionIdRef,
     onInitialInputSentRef,
+    initialInputGateRef,
+    initialInputOriginRef,
+    onInitialInputDiscardedRef,
     onExitRef,
     onAgentCompleteRef,
     setBootPhase,
@@ -772,7 +792,14 @@ export function useXtermSession(params: {
       // estabelece a visibilidade correta no backend desde já.
       void setPtyVisible(existingId, isPanelVisibleRef.current).catch(() => {})
 
-      if (command === 'claude' || command === 'codex' || command === 'opencode') {
+      // Lord: o monitor é genérico (silêncio de E/S, não marcador por CLI), então o Cursor
+      // recebe o mesmo aviso de "terminou" dos demais — antes era o único agente mudo.
+      if (
+        command === 'claude' ||
+        command === 'codex' ||
+        command === 'opencode' ||
+        command === 'cursor'
+      ) {
         completionMonitor = new AgentCompletionMonitor({
           ptyId: existingId,
           agent: command,
@@ -1142,7 +1169,13 @@ export function useXtermSession(params: {
           registerSessionClaim(command, cwd, launch.sessionId, response.id)
         }
 
-        if (command === 'claude' || command === 'codex' || command === 'opencode') {
+        // Lord: mesma inclusão do Cursor do caminho de reconexão acima.
+        if (
+          command === 'claude' ||
+          command === 'codex' ||
+          command === 'opencode' ||
+          command === 'cursor'
+        ) {
           completionMonitor = new AgentCompletionMonitor({
             ptyId: response.id,
             agent: command,
@@ -1309,10 +1342,13 @@ export function useXtermSession(params: {
             completionMonitor = null
             return
           }
+          // Lord: sem 'cursor' aqui, uma aba de Cursor cujo binário morre no nascimento
+          // ficava cinza e silenciosa — o usuário não distinguia CLI ausente de agente lento.
           const isAgent =
             command === 'claude' ||
             command === 'codex' ||
             command === 'opencode' ||
+            command === 'cursor' ||
             command === 'antigravity'
           const elapsed = Date.now() - spawnedAtRef.current
           // Fallback 1: agent morreu no nascimento COM resume → sessão órfã.
@@ -1366,6 +1402,33 @@ export function useXtermSession(params: {
         const prompt = initialInput?.trim()
         if (prompt) {
           const sendInitialInput = async () => {
+            // Lord: portão de confirmação humana. Enquanto ele segurar, nada é
+            // escrito no PTY e nenhum relógio de envio corre — só sai daqui
+            // quando o usuário libera (`send`) ou descarta (`discard`). O
+            // caminho `auto` atravessa este laço sem um único await.
+            let holdBannerWritten = false
+            for (;;) {
+              if (disposed) return
+              const gate = initialInputGateRef.current ?? 'auto'
+              if (gate === 'discard') {
+                onInitialInputDiscardedRef.current?.()
+                return
+              }
+              if (gate !== 'hold') break
+              if (!holdBannerWritten) {
+                holdBannerWritten = true
+                terminal.write(
+                  `\r\n\x1b[33m${translate(getLocale(), 'orchestration.pending.banner', {
+                    origin: initialInputOriginRef.current ?? '—',
+                  })}\x1b[0m\r\n`,
+                )
+              }
+              await new Promise((resolve) =>
+                window.setTimeout(resolve, INITIAL_INPUT_GATE_POLL_MS),
+              )
+            }
+            // Liberado: daqui pra baixo é a espera-por-silêncio original, com os
+            // relógios contados a partir da liberação.
             const earliestSendAt = Date.now() + 1_500
             const timedSendAt = Date.now() + 4_000
             const deadline = Date.now() + 10_000
