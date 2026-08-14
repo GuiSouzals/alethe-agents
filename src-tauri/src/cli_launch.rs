@@ -196,16 +196,24 @@ mod tests {
         assert_eq!(resolve_target_dir(&args(&["alethe"]), Path::new("/")), None);
     }
 
+    /// Lord: o esperado precisa passar pelo mesmo `strip_verbatim_prefix` da produção.
+    /// `canonicalize` no Windows devolve `\\?\C:\...` e `resolve_target_dir` tira esse
+    /// prefixo de propósito, então comparar com o canônico cru falha sempre. Só apareceu
+    /// quando `cargo test` passou a rodar no CI — antes não rodava em lugar nenhum.
+    fn temp_dir_como_a_producao_ve() -> PathBuf {
+        strip_verbatim_prefix(std::env::temp_dir().canonicalize().expect("temp dir"))
+    }
+
     #[test]
     fn dot_resolves_against_caller_cwd() {
-        let cwd = std::env::temp_dir().canonicalize().expect("temp dir");
+        let cwd = temp_dir_como_a_producao_ve();
         let resolved = resolve_target_dir(&args(&["alethe", "."]), &cwd).expect("resolvido");
         assert_eq!(resolved, cwd);
     }
 
     #[test]
     fn relative_path_resolves_against_caller_cwd() {
-        let base = std::env::temp_dir().canonicalize().expect("temp dir");
+        let base = temp_dir_como_a_producao_ve();
         let nested = base.join("alethe-cli-test-rel");
         std::fs::create_dir_all(&nested).expect("criar dir");
 
@@ -218,7 +226,7 @@ mod tests {
 
     #[test]
     fn file_target_falls_back_to_its_directory() {
-        let base = std::env::temp_dir().canonicalize().expect("temp dir");
+        let base = temp_dir_como_a_producao_ve();
         let dir = base.join("alethe-cli-test-file");
         std::fs::create_dir_all(&dir).expect("criar dir");
         let file = dir.join("README.md");

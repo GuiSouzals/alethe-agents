@@ -39,6 +39,13 @@ jobs:
       - name: Unit tests (vitest)
         run: npm test
 
+      # Os testes de git_control criam repo temporario e comitam de verdade; sem
+      # identidade o git recusa com "Author identity unknown" e o teste morre no unwrap.
+      - name: Git identity for git_control tests
+        run: |
+          git config --global user.email "ci@lord.local"
+          git config --global user.name "Lord CI"
+
       - name: Unit tests (cargo)
         run: npm run test:rust
 
