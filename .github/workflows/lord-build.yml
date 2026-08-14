@@ -28,7 +28,7 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund   # CONTORNO, nao correcao: npm ci falha porque o lock e o npm do runner divergem no dedupe de transitivas de @testing-library (lz-string, pretty-format). Voltar para npm ci quando o lock for regenerado com o mesmo npm do runner.
 
       - name: Build Tauri installers
         run: npm run tauri build
