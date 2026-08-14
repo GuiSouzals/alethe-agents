@@ -1,4 +1,5 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core'
+import { invoke } from '@tauri-apps/api/core'
 import {
   GripVertical,
   Maximize2,
@@ -17,6 +18,7 @@ import { useT } from '../../lib/i18n'
 import { buildAgentLaunch } from '../../lib/sessionLaunch'
 import { getActiveSessions, saveSession, savedConversationIdFor } from '../../lib/sessionResume'
 import { useProjectsStore } from '../../stores/projectsStore'
+import { useOrchestrationStore } from '../../stores/orchestrationStore'
 import { useTerminalsStore } from '../../stores/terminalsStore'
 import { useUiStore } from '../../stores/uiStore'
 import {
@@ -26,11 +28,13 @@ import {
   type Theme,
   type AgentType,
 } from '../../lib/types'
+import { findRunForSubTab, type OrchestrationEvent } from '../../lib/orchestration'
 import { getPtyCwd, openInVscode, restartPty, snapshotCodexSessions } from '../../lib/tauri'
 import { AgentIcon, VSCodeIcon } from '../icons/AgentIcons'
 import { SubTabsLane } from '../SubTabsLane'
 import { XTermView } from '../XTermView'
 import { GhosttySurface } from '../GhosttySurface'
+import { OrchestrationActivity } from '../OrchestrationActivity'
 import { shouldUseNativeBackend } from '../../lib/platform'
 import { buildGhosttyCommand } from '../../lib/ghosttyCommand'
 import styles from './TerminalPane.module.css'
@@ -44,6 +48,34 @@ export type TerminalPaneProps = {
   inFocusOverlay?: boolean
   /** True quando renderizado na Home — esconde grip, actions, lane, grid resize. */
   preview?: boolean
+}
+
+// Lord F3: Converte callbacks reais do PTY em eventos sem inferir qualidade do resultado.
+function runtimeProjectionEvent(
+  tab: SubTab,
+  terminalId: string,
+  type: 'pty_started' | 'process_exited',
+  details: { ptyId: string; exitCode?: number | null },
+): OrchestrationEvent | null {
+  const jobId = tab.orchestrationJobId
+  if (!jobId) return null
+  return {
+    eventId: `${jobId}:${type}:${details.ptyId}`,
+    type,
+    runId: jobId,
+    requestId: tab.orchestrationRequestId ?? jobId,
+    jobId,
+    provider: tab.type,
+    origin: tab.orchestrationOrigin ?? 'external',
+    source: 'external_spawn',
+    occurredAt: Date.now(),
+    parentTerminalId: tab.orchestrationParentTerminalId,
+    terminalId,
+    tabId: tab.id,
+    ptyId: details.ptyId,
+    exitCode: details.exitCode,
+    liveOutput: 'pty',
+  }
 }
 
 export const TerminalPane = memo(function TerminalPane({
@@ -106,7 +138,9 @@ export const TerminalPane = memo(function TerminalPane({
   const setSubTabSessionId = useProjectsStore((s) => s.setSubTabSessionId)
   const setSubTabInitialInput = useProjectsStore((s) => s.setSubTabInitialInput)
   const setSubTabCompletionUnread = useProjectsStore((s) => s.setSubTabCompletionUnread)
-  const deleteTerminalWithWorktreeCleanup = useProjectsStore((s) => s.deleteTerminalWithWorktreeCleanup)
+  const deleteTerminalWithWorktreeCleanup = useProjectsStore(
+    (s) => s.deleteTerminalWithWorktreeCleanup,
+  )
   const setProjectGridLayout = useProjectsStore((s) => s.setProjectGridLayout)
   const openModal = useUiStore((s) => s.openModal_)
   const setFocusedTerminal = useUiStore((s) => s.setFocusedTerminal)
@@ -153,6 +187,26 @@ export const TerminalPane = memo(function TerminalPane({
   const activeTab: SubTab | undefined = useMemo(
     () => terminal.tabs.find((tab) => tab.id === terminal.activeTabId) ?? terminal.tabs[0],
     [terminal.tabs, terminal.activeTabId],
+  )
+
+  const orchestrationRunsById = useOrchestrationStore((s) => s.runsById)
+  const orchestrationRunOrder = useOrchestrationStore((s) => s.runOrder)
+  const recordOrchestrationEvent = useOrchestrationStore((s) => s.recordEvent)
+  const orchestrationRun = useMemo(
+    () => findRunForSubTab({ runsById: orchestrationRunsById }, activeTab),
+    [activeTab, orchestrationRunsById],
+  )
+  const internalRuns = useMemo(
+    () =>
+      orchestrationRunOrder
+        .map((runId) => orchestrationRunsById[runId])
+        .filter(
+          (run): run is NonNullable<typeof run> =>
+            Boolean(run) &&
+            run.source === 'internal_subagent' &&
+            run.parentTerminalId === terminal.id,
+        ),
+    [orchestrationRunOrder, orchestrationRunsById, terminal.id],
   )
 
   const effectiveLaneVisible = terminal.tabs.length > 1 ? true : terminal.laneVisible === true
@@ -258,6 +312,20 @@ export const TerminalPane = memo(function TerminalPane({
     if (isFocusMode) setFocusedTerminal(null)
   }
 
+  // Lord F3: Navegação usa IDs persistidos; se o alvo não for único/existente, não adivinha.
+  const focusOrchestrationTerminal = (terminalId: string) => {
+    const projects = useProjectsStore.getState()
+    const targetProject = projects.projects.find((project) =>
+      project.terminals.some((candidate) => candidate.id === terminalId),
+    )
+    if (!targetProject) return
+    projects.setActiveProjectOnly(targetProject.id)
+    projects.focusWorkspaceTerminal(targetProject.id, terminalId)
+    setActiveTerminal(targetProject.id, terminalId)
+    requestPaneFocus(terminalId)
+    useUiStore.getState().setActiveView('workspace')
+  }
+
   const onToggleLane = () => {
     if (terminal.tabs.length > 1) return
     setLaneVisible(projectId, terminal.id, !effectiveLaneVisible)
@@ -295,7 +363,9 @@ export const TerminalPane = memo(function TerminalPane({
         <div
           className={styles.headLeft}
           onDoubleClick={() => setFocusedTerminal(isFocusMode ? null : terminal.id)}
-          title={isFocusMode ? t('ui.terminal.exitFocusModeEsc') : t('ui.terminal.focusModeFullscreen')}
+          title={
+            isFocusMode ? t('ui.terminal.exitFocusModeEsc') : t('ui.terminal.focusModeFullscreen')
+          }
         >
           {canDragPane ? (
             <button
@@ -316,6 +386,11 @@ export const TerminalPane = memo(function TerminalPane({
             <span className={styles.name} title={terminal.name}>
               {terminal.name}
             </span>
+            {activeTab ? (
+              <span className={styles.orchestrationMode}>
+                {t(`orchestration.mode.${activeTab.orchestrationMode}`)}
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -399,86 +474,124 @@ export const TerminalPane = memo(function TerminalPane({
           />
         ) : null}
 
-        <div className={styles.terminalArea}>
-          {terminal.disabled ? (
-            <DisabledOverlay
-              terminalName={terminal.name}
-              cwd={cwd}
-              agentType={activeTab?.type ?? 'shell'}
-              terminalTheme={terminalTheme}
-              onReactivate={onDisable}
+        <div className={styles.terminalContent}>
+          {!preview && activeTab ? (
+            <OrchestrationActivity
+              mode={activeTab.orchestrationMode}
+              run={orchestrationRun}
+              internalRuns={internalRuns}
+              currentTerminalId={terminal.id}
+              onFocusTerminal={focusOrchestrationTerminal}
             />
-          ) : activeTab ? (
-            <>
-              {useNativeBackend ? (
-                <GhosttySurface
-                  key={`${activeTab.id}:${resumeNonce}`}
-                  surfaceId={activeTab.id}
-                  cwd={activeTab.cwd?.trim() || terminal.cwd?.trim() || undefined}
-                  command={buildGhosttyCommand(activeTab.type, activeTab.extraArgs)}
-                  onSpawned={(id) => {
-                    if (activeTab.ptyId !== id) {
-                      setSubTabPtyId(projectId, terminal.id, activeTab.id, id)
+          ) : null}
+          <div className={styles.terminalArea}>
+            {terminal.disabled ? (
+              <DisabledOverlay
+                terminalName={terminal.name}
+                cwd={cwd}
+                agentType={activeTab?.type ?? 'shell'}
+                terminalTheme={terminalTheme}
+                onReactivate={onDisable}
+              />
+            ) : activeTab ? (
+              <>
+                {useNativeBackend ? (
+                  <GhosttySurface
+                    key={`${activeTab.id}:${resumeNonce}`}
+                    surfaceId={activeTab.id}
+                    cwd={activeTab.cwd?.trim() || terminal.cwd?.trim() || undefined}
+                    command={buildGhosttyCommand(activeTab.type, activeTab.extraArgs)}
+                    onSpawned={(id) => {
+                      if (activeTab.ptyId !== id) {
+                        setSubTabPtyId(projectId, terminal.id, activeTab.id, id)
+                      }
+                      const projectionEvent = runtimeProjectionEvent(
+                        activeTab,
+                        terminal.id,
+                        'pty_started',
+                        { ptyId: id },
+                      )
+                      if (projectionEvent) recordOrchestrationEvent(projectionEvent)
+                      if (activeTab.orchestrationRequestId) {
+                        void invoke('agent_spawn_report', {
+                          report: {
+                            requestId: activeTab.orchestrationRequestId,
+                            status: 'pty_started',
+                            terminalId: terminal.id,
+                          },
+                        }).catch((error) =>
+                          console.warn('[Lord F3] Não foi possível confirmar pty_started:', error),
+                        )
+                      }
+                    }}
+                  />
+                ) : (
+                  <XTermView
+                    key={`${activeTab.id}:${resumeNonce}`}
+                    projectId={projectId}
+                    ptyId={activeTab.ptyId ?? activeTab.id}
+                    sessionKey={activeTab.id}
+                    command={activeTab.type === 'shell' ? null : activeTab.type}
+                    cwd={activeTab.cwd || null}
+                    extraArgs={activeTab.extraArgs}
+                    initialInput={activeTab.initialInput}
+                    runtimeProfile={activeTab.runtimeProfile}
+                    sessionId={activeTab.sessionId}
+                    graphifyRepo={graphifyRepo}
+                    gsdWatcherEnabled={gsdWatcherEnabled}
+                    trustSessionId={terminal.gsdSyncViewer}
+                    readOnly={terminal.gsdSyncViewer}
+                    terminalTheme={terminalTheme}
+                    onSpawned={(id) => {
+                      if (activeTab.ptyId !== id) {
+                        setSubTabPtyId(projectId, terminal.id, activeTab.id, id)
+                      }
+                    }}
+                    onSessionId={(sessionId) => {
+                      if (activeTab.sessionId !== sessionId) {
+                        setSubTabSessionId(projectId, terminal.id, activeTab.id, sessionId)
+                      }
+                    }}
+                    onInitialInputSent={() =>
+                      setSubTabInitialInput(projectId, terminal.id, activeTab.id, undefined)
                     }
-                  }}
-                />
-              ) : (
-                <XTermView
-                  key={`${activeTab.id}:${resumeNonce}`}
-                  projectId={projectId}
-                  ptyId={activeTab.ptyId ?? activeTab.id}
-                  sessionKey={activeTab.id}
-                  command={activeTab.type === 'shell' ? null : activeTab.type}
-                  cwd={activeTab.cwd || null}
-                  extraArgs={activeTab.extraArgs}
-                  initialInput={activeTab.initialInput}
-                  runtimeProfile={activeTab.runtimeProfile}
-                  sessionId={activeTab.sessionId}
-                  graphifyRepo={graphifyRepo}
-                  gsdWatcherEnabled={gsdWatcherEnabled}
-                  trustSessionId={terminal.gsdSyncViewer}
-                  readOnly={terminal.gsdSyncViewer}
-                  terminalTheme={terminalTheme}
-                  onSpawned={(id) => {
-                    if (activeTab.ptyId !== id) {
-                      setSubTabPtyId(projectId, terminal.id, activeTab.id, id)
+                    onAgentComplete={() =>
+                      setSubTabCompletionUnread(projectId, terminal.id, activeTab.id, true)
                     }
-                  }}
-                  onSessionId={(sessionId) => {
-                    if (activeTab.sessionId !== sessionId) {
-                      setSubTabSessionId(projectId, terminal.id, activeTab.id, sessionId)
-                    }
-                  }}
-                  onInitialInputSent={() =>
-                    setSubTabInitialInput(projectId, terminal.id, activeTab.id, undefined)
-                  }
-                  onAgentComplete={() =>
-                    setSubTabCompletionUnread(projectId, terminal.id, activeTab.id, true)
-                  }
-                />
-              )}
-              {ptyExited && !useNativeBackend ? (
-                <div className={styles.exitedOverlay}>
-                  <RefreshCw size={24} style={{ opacity: 0.5 }} />
-                  {!ptyParked ? (
-                    <span className={styles.exitedLabel}>{t('ui.terminal.processEnded')}</span>
-                  ) : null}
-                  <button
-                    type="button"
-                    className={styles.restartBtn}
-                    onClick={() => void onRestart()}
-                  >
-                    {ptyParked ? t('ui.terminal.resume') : t('ui.terminal.restart')}
-                  </button>
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <div className={styles.empty}>
-              <X size={20} />
-              <span>{t('ui.terminal.noTab')}</span>
-            </div>
-          )}
+                    onExit={(exitCode) => {
+                      const projectionEvent = runtimeProjectionEvent(
+                        activeTab,
+                        terminal.id,
+                        'process_exited',
+                        { ptyId: activeTab.ptyId ?? activeTab.id, exitCode },
+                      )
+                      if (projectionEvent) recordOrchestrationEvent(projectionEvent)
+                    }}
+                  />
+                )}
+                {ptyExited && !useNativeBackend ? (
+                  <div className={styles.exitedOverlay}>
+                    <RefreshCw size={24} style={{ opacity: 0.5 }} />
+                    {!ptyParked ? (
+                      <span className={styles.exitedLabel}>{t('ui.terminal.processEnded')}</span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className={styles.restartBtn}
+                      onClick={() => void onRestart()}
+                    >
+                      {ptyParked ? t('ui.terminal.resume') : t('ui.terminal.restart')}
+                    </button>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className={styles.empty}>
+                <X size={20} />
+                <span>{t('ui.terminal.noTab')}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

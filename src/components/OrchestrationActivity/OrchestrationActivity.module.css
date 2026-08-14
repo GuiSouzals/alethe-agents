@@ -1,0 +1,102 @@
+/* Lord F3: Projeção neutra e compacta; não usa cores de aprovação. */
+.activity {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 6px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 10px;
+}
+
+.runBar {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mode,
+.state {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--fg);
+  background: var(--panel);
+  text-transform: lowercase;
+}
+
+.origin {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.navigation {
+  margin-left: auto;
+  display: flex;
+  gap: 3px;
+}
+
+.navigation button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 5px;
+  color: var(--fg-muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.navigation button:hover {
+  color: var(--fg);
+  background: var(--panel-hover);
+  border-color: var(--border-strong);
+}
+
+.internalCard {
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+
+.internalHeader {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fg);
+}
+
+.internalHeader span {
+  margin-left: auto;
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+
+.internalOrigin,
+.unavailable {
+  margin-top: 4px;
+  color: var(--fg-faint);
+}
+
+.transcript {
+  max-height: 120px;
+  margin: 6px 0 0;
+  padding: 6px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg-muted);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: 10px/1.4 var(--font-mono);
+}

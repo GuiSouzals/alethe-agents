@@ -44,6 +44,7 @@ import { useKeybindings } from './hooks/useKeybindings'
 import { useDiscordPresence } from './hooks/useDiscordPresence'
 import { useCliOpenRequests } from './hooks/useCliOpenRequests'
 import { useAgentSpawnListener } from './hooks/useAgentSpawnListener'
+import { useInternalSubagentProjection } from './hooks/useInternalSubagentProjection'
 import { useCloseConfirmation } from './hooks/useCloseConfirmation'
 import { useResourceSupervisor } from './hooks/useResourceSupervisor'
 import { startActivityTracker } from './lib/activityTracker'
@@ -204,6 +205,8 @@ export default function App() {
   useCliOpenRequests(hydrated)
   // Lord B1: Keep the external dispatcher connected to the hydrated workspace.
   useAgentSpawnListener(hydrated)
+  // Lord F3: Hooks internos alimentam apenas cards read-only correlacionados por IDs estáveis.
+  useInternalSubagentProjection(hydrated)
 
   useEffect(() => {
     void hydrate()
@@ -221,9 +224,11 @@ export default function App() {
 
   useEffect(() => {
     if (!hydrated) return
-    void getCurrentWindow().setIcon(getThemeIcon(appIconTheme)).catch(() => {
-      // Browser/test environments do not expose the native window icon API.
-    })
+    void getCurrentWindow()
+      .setIcon(getThemeIcon(appIconTheme))
+      .catch(() => {
+        // Browser/test environments do not expose the native window icon API.
+      })
   }, [appIconTheme, hydrated])
 
   useEffect(() => {

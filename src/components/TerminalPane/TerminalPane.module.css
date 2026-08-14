@@ -169,6 +169,18 @@
   min-width: 0;
 }
 
+/* Lord F3: Capability aparece sem usar cor de aprovação. */
+.orchestrationMode {
+  flex: 0 0 auto;
+  padding: 1px 4px;
+  color: var(--fg-muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 9px;
+  text-transform: lowercase;
+}
+
 .name {
   font: 500 12px var(--font-sans);
   color: var(--fg);
@@ -306,6 +318,15 @@
   flex: 1;
   position: relative;
   display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.terminalContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   overflow: hidden;

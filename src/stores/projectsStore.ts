@@ -10,6 +10,7 @@ import {
   type LayoutMode,
   type Locale,
   type OrphanWorktree,
+  type OrchestrationMode,
   type Preferences,
   type Project,
   type ProjectsFile,
@@ -40,7 +41,7 @@ import {
 } from '../lib/tauri'
 import { setStorageNamespace } from '../lib/storageNamespace'
 import { getProjectDefaultCwd, getProjectRepoRoot } from '../lib/terminalFactory'
-import { migrate } from './projectsStore.migrations'
+import { migrate, prepareProjectsForPersistence } from './projectsStore.migrations'
 import { createGroupsSlice, createProjectsSlice } from './projectsStore.projectSlices'
 import {
   createPreferencesSlice,
@@ -104,7 +105,10 @@ export type ProjectsState = ProjectsFile & {
   unarchiveProject: (id: string) => void
   setProjectColor: (id: string, color: string | undefined) => void
   setProjectIconUrl: (id: string, iconUrl: string | undefined) => void
-  addMarkdownComment: (projectId: string, comment: Omit<import('../lib/types').MarkdownComment, 'id' | 'createdAt'>) => void
+  addMarkdownComment: (
+    projectId: string,
+    comment: Omit<import('../lib/types').MarkdownComment, 'id' | 'createdAt'>,
+  ) => void
   removeMarkdownComment: (projectId: string, commentId: string) => void
   setWorktreeMode: (id: string, mode: 'gitWorktree' | 'localCopy') => void
   setValidationCommands: (id: string, commands: string[]) => void
@@ -192,6 +196,12 @@ export type ProjectsState = ProjectsFile & {
         extraArgs?: string[]
         initialInput?: string
         runtimeProfile?: AgentRuntimeProfile
+        orchestrationMode?: OrchestrationMode
+        orchestrationOrigin?: string
+        orchestrationRequestId?: string
+        orchestrationJobId?: string
+        orchestrationParentTerminalId?: string
+        orchestrationInternalAgentId?: string
       }
       worktreeAgentId?: string
       gsdSyncViewer?: boolean
@@ -214,6 +224,12 @@ export type ProjectsState = ProjectsFile & {
         extraArgs?: string[]
         initialInput?: string
         runtimeProfile?: AgentRuntimeProfile
+        orchestrationMode?: OrchestrationMode
+        orchestrationOrigin?: string
+        orchestrationRequestId?: string
+        orchestrationJobId?: string
+        orchestrationParentTerminalId?: string
+        orchestrationInternalAgentId?: string
       }
     },
   ) => Promise<Terminal>
@@ -281,6 +297,12 @@ export type ProjectsState = ProjectsFile & {
       name?: string
       extraArgs?: string[]
       runtimeProfile?: AgentRuntimeProfile
+      orchestrationMode?: OrchestrationMode
+      orchestrationOrigin?: string
+      orchestrationRequestId?: string
+      orchestrationJobId?: string
+      orchestrationParentTerminalId?: string
+      orchestrationInternalAgentId?: string
     },
   ) => SubTab
   closeSubTab: (projectId: string, terminalId: string, tabId: string) => void
@@ -348,7 +370,8 @@ function scheduleSave(getState: () => ProjectsState) {
       version: 6,
       groups: state.groups,
       ungroupedOrder: state.ungroupedOrder,
-      projects: state.projects,
+      // Lord F3: Estado efêmero (incluindo initialInput) nunca entra em projects.json.
+      projects: prepareProjectsForPersistence(state.projects),
       todos: state.todos,
       activeProjectId: state.activeProjectId,
       workspace: state.workspace,

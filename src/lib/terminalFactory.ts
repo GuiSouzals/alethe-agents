@@ -12,6 +12,7 @@ import type {
   AgentRuntimeProfile,
   AgentType,
   LayoutMode,
+  OrchestrationMode,
   Project,
   SubTab,
   Terminal,
@@ -64,6 +65,12 @@ export function makeDefaultTerminal(args: {
     extraArgs?: string[]
     initialInput?: string
     runtimeProfile?: AgentRuntimeProfile
+    orchestrationMode?: OrchestrationMode
+    orchestrationOrigin?: string
+    orchestrationRequestId?: string
+    orchestrationJobId?: string
+    orchestrationParentTerminalId?: string
+    orchestrationInternalAgentId?: string
   }
   worktreeAgentId?: string
   gsdSyncViewer?: boolean
@@ -91,6 +98,13 @@ export function makeDefaultTerminal(args: {
         extraArgs: args.firstTab.extraArgs,
         initialInput: args.firstTab.initialInput,
         runtimeProfile: args.firstTab.runtimeProfile,
+        // Lord F3: Solo é uma capability completa e o backfill de toda criação local.
+        orchestrationMode: args.firstTab.orchestrationMode ?? 'solo',
+        orchestrationOrigin: args.firstTab.orchestrationOrigin,
+        orchestrationRequestId: args.firstTab.orchestrationRequestId,
+        orchestrationJobId: args.firstTab.orchestrationJobId,
+        orchestrationParentTerminalId: args.firstTab.orchestrationParentTerminalId,
+        orchestrationInternalAgentId: args.firstTab.orchestrationInternalAgentId,
       },
     ],
   }

@@ -21,6 +21,7 @@ export type AgentSpawnPayloadV1 = {
   projectId?: string
   origin: string
   name?: string
+  parentTerminalId?: string
 }
 
 export type SpawnProject = Pick<Project, 'id' | 'defaultCwd'>
@@ -33,6 +34,10 @@ export type SpawnResolution =
       provider: SpawnProvider
       task: string
       name?: string
+      requestId: string
+      jobId: string
+      origin: string
+      parentTerminalId?: string
     }
   | {
       status: 'invalid'
@@ -96,6 +101,10 @@ export function resolveSpawnTarget(
       provider: payload.provider,
       task: payload.task,
       name: payload.name,
+      requestId: payload.requestId,
+      jobId: payload.jobId,
+      origin: payload.origin,
+      parentTerminalId: payload.parentTerminalId,
     }
   }
 
@@ -111,5 +120,9 @@ export function resolveSpawnTarget(
     provider: payload.provider,
     task: payload.task,
     name: payload.name,
+    requestId: payload.requestId,
+    jobId: payload.jobId,
+    origin: payload.origin,
+    parentTerminalId: payload.parentTerminalId,
   }
 }

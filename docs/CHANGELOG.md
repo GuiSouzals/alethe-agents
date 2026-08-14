@@ -12,6 +12,7 @@ Mudanças relevantes do **Alethe** para quem usa o app. Formato inspirado em
 
 ### Adicionado
 
+- **Developer-mode orchestration visibility (Lord F3).** External dispatches now open real solo terminals with persisted origin/correlation IDs, show neutral lifecycle labels, keep prompts and live output in the normal xterm, expose safe parent/child focus controls, and project provider-emitted internal subagents as read-only cards. The ephemeral run reducer rejects duplicate and regressive events, while prompts and judgment never enter `projects.json`; team and animated modes remain gated off.
 - **Cursor Agent as a first-class CLI.** New agent type with resolver (`cursor-agent` / `agent`), Windows shim promotion to `.cmd`, interactive launch adapter, theme token, icon, Home quick-start, terminal/sub-tab pickers, and preferences toggle.
 - **Honest Cursor availability card and topbar pill (D3).** Shows CLI connected / missing / sign-in state and a link to the Cursor dashboard — never a local usage percentage or progress bar.
 - **External agent dispatch now has a truthful, idempotent v1 contract.** Authenticated `/spawn` requests correlate `request_id`, job, project, and terminal state; duplicate requests reuse the same terminal, invalid or unmatched targets are explicitly rejected, and a missing UI consumer can no longer report a false queued success. The profile-local discovery file still exposes the listener endpoint and token to external processes.

@@ -38,6 +38,8 @@ struct SpawnRequestV1 {
     project_id: Option<String>,
     origin: String,
     name: Option<String>,
+    // Lord F3: Vínculo opcional e estável para a UI focar pai/filho sem inferência.
+    parent_terminal_id: Option<String>,
 }
 
 // Lord D1: O evento interno usa camelCase por ser consumido diretamente pelo TypeScript.
@@ -53,6 +55,8 @@ struct SpawnEventV1 {
     project_id: Option<String>,
     origin: String,
     name: Option<String>,
+    // Lord F3: O evento interno usa camelCase pela serialização da struct.
+    parent_terminal_id: Option<String>,
 }
 
 // Lord D1: Confirmações aceitas do consumidor único do workspace.
@@ -389,6 +393,7 @@ pub fn start_listener(app: AppHandle) {
                         project_id: payload.project_id,
                         origin: payload.origin,
                         name: payload.name,
+                        parent_terminal_id: payload.parent_terminal_id,
                     };
                     eprintln!(
                         "[agent_events] /spawn provider={} request_id={} job_id={}",

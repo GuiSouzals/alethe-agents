@@ -54,6 +54,12 @@ export type Locale = 'en' | 'pt-BR'
 
 export type LayoutMode = 'auto' | 'spotlight' | 'sidebar' | 'grid'
 
+// Lord F3: Capability de orquestração é independente do executável escolhido.
+export type OrchestrationMode = 'solo' | 'team'
+
+// Lord F3: `animated` fica reservado; esta entrega sempre usa a apresentação dev.
+export type OrchestrationPresentation = 'dev' | 'animated'
+
 /** Posição/tamanho de uma Célula no grid. Coordenadas 1-based (CSS Grid style). */
 export type GridCell = {
   col: number
@@ -123,6 +129,15 @@ export type SubTab = {
   initialInput?: string
   /** Perfil de custo do runtime. Ausente preserva o comportamento completo legado. */
   runtimeProfile?: AgentRuntimeProfile
+  /** Lord F3: Capability persistida; registros antigos normalizam para `solo`. */
+  orchestrationMode: OrchestrationMode
+  /** Lord F3: Origem declarada do despacho, sem conteúdo de prompt ou julgamento. */
+  orchestrationOrigin?: string
+  /** Lord F3: IDs estáveis mínimos para retomar, correlacionar e focar a execução. */
+  orchestrationRequestId?: string
+  orchestrationJobId?: string
+  orchestrationParentTerminalId?: string
+  orchestrationInternalAgentId?: string
 }
 
 export type AgentRuntimeProfile = 'full' | 'lean' | 'diagnostic'
@@ -421,6 +436,8 @@ export type Preferences = {
   dictationEnabled: boolean
   /** Quantos PTYs podem ser spawnados em paralelo (fila global). Default 3. */
   spawnConcurrency: number
+  /** Lord F3: Apresentação preferida; `dev` é o default e único modo habilitado. */
+  orchestrationPresentation: OrchestrationPresentation
   /** Limites de RAM e política de estacionamento automático dos runtimes. */
   resourcePolicy: ResourcePolicyPreferences
   /** v2.2 — grid layout custom da workspace inteira (cross-grupo). */
@@ -542,6 +559,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   notifyOnLimitReset: true,
   dictationEnabled: false,
   spawnConcurrency: 3,
+  // Lord F3: PTY real e aberto é a experiência padrão de orquestração.
+  orchestrationPresentation: 'dev',
   resourcePolicy: {
     mode: 'manual',
     automaticParkingOptIn: false,
@@ -628,11 +647,6 @@ export const PROVIDER_MODELS: Record<AgentType, { id: string; label: string }[]>
     { id: 'mimo-pro', label: 'Mimo Pro' },
     { id: 'mimo-flash', label: 'Mimo Flash' },
   ],
-  freebuff: [
-    { id: 'freebuff-auto', label: 'Freebuff Auto' },
-  ],
-  shell: [
-    { id: 'default', label: 'Shell Padrão' },
-  ],
+  freebuff: [{ id: 'freebuff-auto', label: 'Freebuff Auto' }],
+  shell: [{ id: 'default', label: 'Shell Padrão' }],
 }
-

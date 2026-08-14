@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: "20"   # fixo: o package-lock.json foi gerado com npm 10.x (Node 20). lts/* usa npm mais novo, que rejeita o lock (ADR-0011: falha reprodutivel > falha misteriosa)
           cache: npm
           cache-dependency-path: package-lock.json
 

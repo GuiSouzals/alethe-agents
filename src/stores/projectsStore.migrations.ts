@@ -84,6 +84,9 @@ export function normalizePreferences(raw: LegacyPreferences | undefined): Prefer
     spotifyClientSecret: preferences.spotifyClientSecret.trim(),
     uiZoom: clampUiZoom(preferences.uiZoom),
     spawnConcurrency: clampSpawnConcurrency(preferences.spawnConcurrency),
+    // Lord F3: Ausência ou valor desconhecido volta ao modo dev; animated fica apenas preparado.
+    orchestrationPresentation:
+      preferences.orchestrationPresentation === 'animated' ? 'animated' : 'dev',
     resourcePolicy: {
       // Older installs inherited Smart LRU without an explicit choice. Migrate
       // them to monitor-only so an update never starts terminating PTYs.
@@ -103,6 +106,34 @@ export function normalizePreferences(raw: LegacyPreferences | undefined): Prefer
       spawnGraceSeconds: Math.min(900, Math.max(30, Math.round(resourcePolicy.spawnGraceSeconds))),
     },
   }
+}
+
+// Lord F3: Normaliza capability/origem/IDs sem carregar prompt efêmero de arquivos antigos.
+export function normalizeOrchestrationProjects(projects: readonly any[]): Project[] {
+  return projects.map((project) => ({
+    ...project,
+    terminals: (project.terminals ?? []).map((terminal: any) => ({
+      ...terminal,
+      tabs: (terminal.tabs ?? []).map((rawTab: any) => {
+        const { initialInput: _legacyPrompt, ...tab } = rawTab
+        return {
+          ...tab,
+          orchestrationMode: tab.orchestrationMode === 'team' ? 'team' : 'solo',
+        }
+      }),
+    })),
+  }))
+}
+
+// Lord F3: O prompt vive somente até ser enviado ao xterm e nunca cruza projects.json.
+export function prepareProjectsForPersistence(projects: readonly Project[]): Project[] {
+  return projects.map((project) => ({
+    ...project,
+    terminals: project.terminals.map((terminal) => ({
+      ...terminal,
+      tabs: terminal.tabs.map(({ initialInput: _transientPrompt, ...tab }) => ({ ...tab })),
+    })),
+  }))
 }
 
 export function normalizeTodos(raw: unknown): TodoItem[] {
@@ -260,7 +291,11 @@ export function migrateWorkspaceNavigation(base: {
 /** Migra arquivos antigos e normaliza snapshots restauráveis. */
 export function migrate(parsed: any): ProjectsFile {
   if (parsed.version === 6) {
-    return { ...parsed, preferences: normalizePreferences(parsed.preferences) }
+    return {
+      ...parsed,
+      projects: normalizeOrchestrationProjects(parsed.projects ?? []),
+      preferences: normalizePreferences(parsed.preferences),
+    }
   }
 
   const v5Result = parsed.version === 5 ? parsed : migrateToV5(parsed)
@@ -274,7 +309,7 @@ export function migrate(parsed: any): ProjectsFile {
   return {
     ...v5Result,
     version: 6,
-    projects: v6Projects,
+    projects: normalizeOrchestrationProjects(v6Projects),
     preferences: normalizePreferences(v5Result.preferences),
   }
 }

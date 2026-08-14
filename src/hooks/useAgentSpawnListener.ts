@@ -3,6 +3,8 @@ import { listen } from '@tauri-apps/api/event'
 import { useEffect } from 'react'
 
 import { AGENT_TYPE_LABELS } from '../lib/types'
+import { effectiveOrchestrationPresentation, type OrchestrationEvent } from '../lib/orchestration'
+import { useOrchestrationStore } from '../stores/orchestrationStore'
 import { useProjectsStore } from '../stores/projectsStore'
 import { useUiStore } from '../stores/uiStore'
 import {
@@ -29,7 +31,51 @@ type SpawnExecutorDependencies = {
     decision: Extract<SpawnResolution, { status: 'matched' }>,
   ) => Promise<{ id: string }>
   focusTerminal: (projectId: string, terminalId: string) => void
+  recordEvent?: (event: OrchestrationEvent) => void
+  shouldFocusTerminal?: (decision: Extract<SpawnResolution, { status: 'matched' }>) => boolean
   onError?: (error: unknown) => void
+}
+
+type MatchedSpawn = Extract<SpawnResolution, { status: 'matched' }>
+
+// Lord F3: Args preservam somente IDs/origem no SubTab; o prompt segue transitório até o xterm.
+export function buildSpawnTerminalArgs(decision: MatchedSpawn) {
+  return {
+    name: decision.name?.trim() || AGENT_TYPE_LABELS[decision.provider],
+    cwd: decision.cwd,
+    firstTab: {
+      type: decision.provider,
+      cwd: decision.cwd,
+      initialInput: decision.task,
+      orchestrationMode: 'solo' as const,
+      orchestrationOrigin: decision.origin,
+      orchestrationRequestId: decision.requestId,
+      orchestrationJobId: decision.jobId,
+      orchestrationParentTerminalId: decision.parentTerminalId,
+    },
+  }
+}
+
+// Lord F3: O adaptador só declara fatos observados no protocolo real.
+function spawnProjectionEvent(
+  decision: MatchedSpawn,
+  type: OrchestrationEvent['type'],
+  details: Pick<OrchestrationEvent, 'terminalId' | 'tabId' | 'failureReason'> = {},
+): OrchestrationEvent {
+  return {
+    eventId: `${decision.jobId}:${type}`,
+    type,
+    runId: decision.jobId,
+    requestId: decision.requestId,
+    jobId: decision.jobId,
+    provider: decision.provider,
+    origin: decision.origin,
+    source: 'external_spawn',
+    occurredAt: Date.now(),
+    parentTerminalId: decision.parentTerminalId,
+    liveOutput: 'pty',
+    ...details,
+  }
 }
 
 // Lord D1: O executor aplica a decisão pura e confirma somente resultados realmente observados.
@@ -47,13 +93,19 @@ export async function executeAgentSpawn(
     return
   }
 
+  dependencies.recordEvent?.(spawnProjectionEvent(decision, 'requested'))
+
   if (!(await dependencies.claim(payload.requestId))) return
+  dependencies.recordEvent?.(spawnProjectionEvent(decision, 'accepted'))
 
   let terminal: { id: string }
   try {
     terminal = await dependencies.createTerminal(decision)
   } catch (error) {
     dependencies.onError?.(error)
+    dependencies.recordEvent?.(
+      spawnProjectionEvent(decision, 'failed', { failureReason: 'terminal_creation_failed' }),
+    )
     await dependencies.report({
       requestId: payload.requestId,
       status: 'rejected',
@@ -62,7 +114,15 @@ export async function executeAgentSpawn(
     return
   }
 
-  dependencies.focusTerminal(decision.projectId, terminal.id)
+  dependencies.recordEvent?.(
+    spawnProjectionEvent(decision, 'terminal_created', {
+      terminalId: terminal.id,
+      tabId: 'activeTabId' in terminal ? String(terminal.activeTabId) : undefined,
+    }),
+  )
+  if (dependencies.shouldFocusTerminal?.(decision) ?? true) {
+    dependencies.focusTerminal(decision.projectId, terminal.id)
+  }
   await dependencies.report({
     requestId: payload.requestId,
     status: 'terminal_created',
@@ -85,15 +145,20 @@ export function useAgentSpawnListener(hydrated: boolean) {
           await invoke('agent_spawn_report', { report })
         },
         createTerminal: (decision) =>
-          useProjectsStore.getState().createAgentTerminal(decision.projectId, {
-            name: decision.name?.trim() || AGENT_TYPE_LABELS[decision.provider],
-            cwd: decision.cwd,
-            firstTab: {
-              type: decision.provider,
-              cwd: decision.cwd,
-              initialInput: decision.task,
-            },
-          }),
+          useProjectsStore
+            .getState()
+            .createAgentTerminal(decision.projectId, buildSpawnTerminalArgs(decision)),
+        recordEvent: (projectionEvent) =>
+          useOrchestrationStore.getState().recordEvent(projectionEvent),
+        shouldFocusTerminal: (decision) =>
+          effectiveOrchestrationPresentation(
+            useProjectsStore.getState().preferences.orchestrationPresentation,
+          ) === 'dev' &&
+          useOrchestrationStore
+            .getState()
+            .claimAutoFocus(
+              decision.parentTerminalId ?? `${decision.origin}:${decision.projectId}`,
+            ),
         focusTerminal: (projectId, terminalId) => {
           const projects = useProjectsStore.getState()
           const ui = useUiStore.getState()
