@@ -5,6 +5,12 @@
  * compilação. Mantenha as chaves em ordem por namespace.
  */
 export const en = {
+  /* ---- app ---- */
+  'app.name': 'Lord',
+  'app.title': 'Lord',
+  'app.devTitle': '(DEV) Lord',
+  'app.identifier': 'com.lord.chassi',
+
   /* ---- loading ---- */
   'loading.initializing': 'Initializing workspace',
 
@@ -455,13 +461,13 @@ export const en = {
   'prefs.resetSessionFailed': 'Could not resume the last session.',
   'prefs.cliCommand': 'Terminal command',
   'prefs.cliCommandDesc':
-    "Install the 'alethe' command so you can open any folder as a project straight from the terminal.",
+    "Install the 'lord' command so you can open any folder as a project straight from the terminal.",
   'prefs.cliInstall': 'Install command',
   'prefs.cliReinstall': 'Reinstall command',
   'prefs.cliUninstall': 'Remove',
   'prefs.cliInstalledAt': 'Installed at {path}',
   'prefs.cliStale':
-    'The installed command points to an older copy of Alethe. Reinstall it to update the path.',
+    'The installed command points to an older copy of Lord. Reinstall it to update the path.',
   'prefs.cliNotOnPath':
     '{dir} is not in your PATH. Add it to your shell profile: export PATH="{dir}:$PATH"',
   'prefs.cliUnsupported': 'The terminal command is not available on this platform.',

@@ -1,10 +1,10 @@
-//! Instalação do comando `alethe` no PATH do usuário.
+//! Installation of the `lord` command in the user's PATH.
 //!
 //! Equivalente ao "Install 'code' command in PATH" do VS Code: escreve um shim
 //! (script) que resolve o diretório alvo e chama o binário do app com
 //! `--open-path <dir>` (ver `cli_launch.rs`).
 //!
-//! O shim é quem faz o trabalho de resolver `alethe` sem argumento → `$PWD`.
+//! The shim resolves `lord` without an argument to `$PWD`.
 //! Assim o binário só abre projeto quando recebe caminho **explícito**, e subir
 //! o app pelo ícone continua caindo na Home normal.
 //!
@@ -12,8 +12,8 @@
 //!
 //! | Plataforma      | Caminho                              | PATH                          |
 //! |-----------------|--------------------------------------|-------------------------------|
-//! | macOS / Linux   | `~/.local/bin/alethe`                | já costuma estar; só avisamos |
-//! | Windows         | `%LOCALAPPDATA%\Alethe\bin\alethe.cmd` | registrado em `HKCU\Environment` |
+//! | macOS / Linux   | `~/.local/bin/lord`                  | usually present; only reported |
+//! | Windows         | `%LOCALAPPDATA%\Lord\bin\lord.cmd` | registered in `HKCU\Environment` |
 //!
 //! Em Unix **não** mexemos em `.zshrc`/`.bashrc` nem pedimos sudo pra escrever
 //! em `/usr/local/bin`: instalar é uma ação explícita do usuário, mas nem por
@@ -25,9 +25,9 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 #[cfg(windows)]
-const SHIM_FILE_NAME: &str = "alethe.cmd";
+const SHIM_FILE_NAME: &str = "lord.cmd";
 #[cfg(not(windows))]
-const SHIM_FILE_NAME: &str = "alethe";
+const SHIM_FILE_NAME: &str = "lord";
 
 /// Estado do comando de terminal, do jeito que a tela de Integrações precisa.
 #[derive(Serialize, Default)]
@@ -51,7 +51,7 @@ fn shim_bin_dir() -> Result<PathBuf, String> {
     {
         let base = dirs_next::data_local_dir()
             .ok_or_else(|| "não foi possível resolver LOCALAPPDATA".to_string())?;
-        Ok(base.join("Alethe").join("bin"))
+        Ok(base.join("Lord").join("bin"))
     }
     #[cfg(not(windows))]
     {
@@ -109,15 +109,14 @@ fn sh_single_quote(value: &str) -> String {
 fn unix_shim_script(target_marker: &str, launch: &str) -> String {
     format!(
         r#"#!/bin/sh
-# alethe — abre um diretório no Alethe a partir do terminal.
+# lord — opens a directory in Lord from the terminal.
 #
-# Gerado automaticamente pelo Alethe (Configurações ▸ Integrações ▸ Comando de
-# terminal). Não edite à mão: reinstale por lá, principalmente depois de mover
-# ou reinstalar o app.
+# Generated automatically by Lord (Settings > Integrations > Terminal command).
+# Do not edit manually; reinstall it there after moving or reinstalling the app.
 #
-# alethe            → abre o diretório atual
-# alethe .          → idem
-# alethe ~/projeto  → abre o diretório informado
+# lord            → opens the current directory
+# lord .          → same
+# lord ~/project  → opens the selected directory
 #
 # ALETHE_TARGET_BIN: {target_marker}
 
@@ -126,7 +125,7 @@ set -e
 target=${{1:-.}}
 
 if [ ! -d "$target" ]; then
-  echo "alethe: diretório não encontrado: $target" >&2
+  echo "lord: directory not found: $target" >&2
   exit 1
 fi
 
@@ -178,11 +177,10 @@ fn render_shim(binary: &Path) -> Result<String, String> {
         let binary = binary.to_string_lossy().to_string();
         return Ok(format!(
             r#"@echo off
-rem alethe - abre um diretorio no Alethe a partir do terminal.
+rem lord - opens a directory in Lord from the terminal.
 rem
-rem Gerado automaticamente pelo Alethe (Configuracoes > Integracoes > Comando de
-rem terminal). Nao edite a mao: reinstale por la, principalmente depois de mover
-rem ou reinstalar o app.
+rem Generated automatically by Lord (Settings > Integrations > Terminal command).
+rem Do not edit manually; reinstall it there after moving or reinstalling the app.
 rem
 rem ALETHE_TARGET_BIN: {binary}
 
@@ -194,7 +192,7 @@ rem Caminho absoluto: o app compara com o cwd salvo dos projetos.
 for %%I in ("%target%") do set "target=%%~fI"
 
 if not exist "%target%\" (
-  echo alethe: diretorio nao encontrado: %target% 1>&2
+  echo lord: directory not found: %target% 1>&2
   exit /b 1
 )
 

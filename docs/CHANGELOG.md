@@ -12,10 +12,13 @@ Mudanças relevantes do **Alethe** para quem usa o app. Formato inspirado em
 
 ### Adicionado
 
+- **External agent dispatch now opens a persistent workspace terminal.** Authenticated `/spawn` requests use the requested agent, working directory, and task, while a profile-local discovery file exposes the listener endpoint and token to external processes.
+- **Added a manually triggered Windows-only CI build for Lord installers.** The workflow uploads MSI and NSIS bundles as artifacts without creating a release or requiring updater signing secrets.
 - **Colar conteúdo do portapapeles via clique direito no terminal (`XTermView`).** Clicar com o botão direito sobre o painel do terminal sem texto selecionado cola o conteúdo do portapapeles (texto, imagens e arquivos). Caso haja texto selecionado no terminal, o clique direito copia a seleção para o portapapeles e limpa o destaque.
 
 ### Alterado
 
+- **Lord now uses its own application identity and data directory.** Production and development builds no longer share Alethe's identifier, updater endpoint, window title, or terminal-command installation path.
 - Added a live Remote Control device counter to the topbar, with direct access to the connection panel.
 - **A borda arco-íris agora é o indicador de foco de qualquer container da workspace, não só um efeito de cor de projeto.** Antes, só containers com a cor "arco-íris" escolhida no projeto mostravam o anel animado, sempre visível independente de foco. Agora qualquer container mostra a borda arco-íris enquanto estiver em foco (um terminal dele com o cursor/digitação ativa); sem foco, volta à borda normal por cor de projeto.
 

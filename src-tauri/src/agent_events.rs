@@ -16,6 +16,8 @@ const HOST: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9123;
 const MAX_PORT: u16 = 9143;
 const BODY_LIMIT: u64 = 1024 * 1024; // 1 MB
+// Lord B1: Keep the bridge contract discoverable inside the active profile.
+const DISCOVERY_FILE_NAME: &str = "lord-agent-listener.json";
 static LISTENER_PORT: AtomicU16 = AtomicU16::new(0);
 static LISTENER_TOKEN: OnceLock<String> = OnceLock::new();
 
@@ -37,6 +39,21 @@ fn listener_addr(port: u16) -> String {
 
 fn listener_endpoint(port: u16) -> String {
     format!("http://{HOST}:{port}")
+}
+
+// Lord B1: Publish only transport coordinates; the listener still receives ready-to-run work.
+fn write_listener_discovery(app: &AppHandle, port: u16) -> Result<(), String> {
+    let profile = crate::profiles::active_profile_state(app)?;
+    let profile_dir = crate::profiles::profile_data_dir_for_id(app, &profile.id)?;
+    let path = profile_dir.join(DISCOVERY_FILE_NAME);
+    let discovery = serde_json::json!({
+        "endpoint": listener_endpoint(port),
+        "token": init_token(),
+    });
+    let body = serde_json::to_string_pretty(&discovery).map_err(|error| error.to_string())?;
+    std::fs::write(&path, body).map_err(|error| error.to_string())?;
+    eprintln!("[agent_events] listener discovery written to {}", path.display());
+    Ok(())
 }
 
 fn current_listener_port() -> Option<u16> {
@@ -142,6 +159,10 @@ pub fn start_listener(app: AppHandle) {
         };
 
         LISTENER_PORT.store(port, Ordering::SeqCst);
+        // Lord B1: Discovery is best-effort so a filesystem error does not disable the listener.
+        if let Err(error) = write_listener_discovery(&app, port) {
+            eprintln!("[agent_events] failed to write listener discovery: {error}");
+        }
         eprintln!("[agent_events] ouvindo em {}", listener_addr(port));
 
         for mut request in server.incoming_requests() {

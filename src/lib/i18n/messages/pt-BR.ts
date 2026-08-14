@@ -5,6 +5,12 @@ import type { MessageKey } from './en'
  * sobrar uma chave em relação a `en.ts`, o TypeScript acusa.
  */
 export const ptBR: Record<MessageKey, string> = {
+  /* ---- app ---- */
+  'app.name': 'Lord',
+  'app.title': 'Lord',
+  'app.devTitle': '(DEV) Lord',
+  'app.identifier': 'com.lord.chassi',
+
   /* ---- loading ---- */
   'loading.initializing': 'Inicializando workspace',
 
@@ -456,13 +462,13 @@ export const ptBR: Record<MessageKey, string> = {
   'prefs.resetSessionFailed': 'Não deu pra retomar a última sessão.',
   'prefs.cliCommand': 'Comando de terminal',
   'prefs.cliCommandDesc':
-    "Instale o comando 'alethe' pra abrir qualquer pasta como projeto direto do terminal.",
+    "Instale o comando 'lord' pra abrir qualquer pasta como projeto direto do terminal.",
   'prefs.cliInstall': 'Instalar comando',
   'prefs.cliReinstall': 'Reinstalar comando',
   'prefs.cliUninstall': 'Remover',
   'prefs.cliInstalledAt': 'Instalado em {path}',
   'prefs.cliStale':
-    'O comando instalado aponta pra uma cópia antiga do Alethe. Reinstale pra atualizar o caminho.',
+    'O comando instalado aponta pra uma cópia antiga do Lord. Reinstale pra atualizar o caminho.',
   'prefs.cliNotOnPath':
     '{dir} não está no seu PATH. Adicione no perfil do shell: export PATH="{dir}:$PATH"',
   'prefs.cliUnsupported': 'O comando de terminal não está disponível nesta plataforma.',

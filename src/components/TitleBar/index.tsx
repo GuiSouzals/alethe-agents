@@ -36,8 +36,6 @@ import styles from './TitleBar.module.css'
 
 const CLAUDE_POLL_INTERVAL_MS = 5 * 60_000
 const REMOTE_CONTROL_POLL_INTERVAL_MS = 2_000
-const APP_TITLE = import.meta.env.DEV ? '(DEV) Alethe' : 'Alethe'
-
 function usagePillColor(utilization: number): string {
   if (utilization >= 80) return 'var(--status-offline)'
   if (utilization >= 50) return 'var(--status-waiting)'
@@ -91,6 +89,7 @@ function MemoryPillButton({ ramMb }: { ramMb: number }) {
 
 export function TitleBar() {
   const t = useT()
+  const appTitle = t(import.meta.env.DEV ? 'app.devTitle' : 'app.title')
   const toggleMainMenu = useUiStore((s) => s.toggleMainMenu)
   const activeView = useUiStore((s) => s.activeView)
   const agentCanvasSession = useUiStore((s) => s.agentCanvasSession)
@@ -288,9 +287,9 @@ export function TitleBar() {
   }, [win])
 
   useEffect(() => {
-    document.title = APP_TITLE
-    void win.setTitle(APP_TITLE)
-  }, [win])
+    document.title = appTitle
+    void win.setTitle(appTitle)
+  }, [appTitle, win])
 
   return (
     <div

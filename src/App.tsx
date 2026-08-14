@@ -43,6 +43,7 @@ import { WelcomeModal } from './components/modals/WelcomeModal'
 import { useKeybindings } from './hooks/useKeybindings'
 import { useDiscordPresence } from './hooks/useDiscordPresence'
 import { useCliOpenRequests } from './hooks/useCliOpenRequests'
+import { useAgentSpawnListener } from './hooks/useAgentSpawnListener'
 import { useCloseConfirmation } from './hooks/useCloseConfirmation'
 import { useResourceSupervisor } from './hooks/useResourceSupervisor'
 import { startActivityTracker } from './lib/activityTracker'
@@ -98,7 +99,7 @@ function LoadingScreen() {
         />
       </div>
       <div className={styles.loadingInner}>
-        <div className={styles.loadingWordmark}>Alethe</div>
+        <div className={styles.loadingWordmark}>{t('app.name')}</div>
         <div className={styles.loadingConsole}>
           <span className={styles.loadingPrompt} aria-hidden="true">
             ›
@@ -201,6 +202,8 @@ export default function App() {
   useCloseConfirmation()
   useResourceSupervisor(hydrated)
   useCliOpenRequests(hydrated)
+  // Lord B1: Keep the external dispatcher connected to the hydrated workspace.
+  useAgentSpawnListener(hydrated)
 
   useEffect(() => {
     void hydrate()

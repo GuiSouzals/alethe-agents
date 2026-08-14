@@ -18,7 +18,7 @@ fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-PROFILE_JSON="$HOME/Library/Application Support/com.kc1t.alethe/profiles/default/projects.json"
+PROFILE_JSON="$HOME/Library/Application Support/com.lord.chassi/profiles/default/projects.json"
 LOG="$(mktemp)"
 TIMEOUT=180
 
