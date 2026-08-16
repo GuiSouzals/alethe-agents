@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { nanoid } from 'nanoid'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
-import { agentHooksEndpoint, agentHooksSettingsPath, agentHooksToken, codexAppServerSend, codexAppServerStart, codexAppServerStop, killPty, listenCodexAppServer, listenPtyData, listenPtyExit, spawnPty, writePty } from '../lib/tauri'
+import { agentHooksEndpoint, agentHooksSettingsPath, agentHooksToken, codexAppServerSend, codexAppServerStop, killPty, listenPtyExit, spawnPty, writePty } from '../lib/tauri'
 
 export type SandboxNodeStatus = 'starting' | 'idle' | 'working' | 'done' | 'error'
 
@@ -67,16 +67,6 @@ type AgentSandboxState = {
 
 const SPAWN_BRIDGE_PROMPT = `You are the Planner Claude inside Alethe. You are the parent orchestrator. When the user asks you to delegate work, create a real Codex worker through Alethe's local bridge instead of doing the work yourself. Use a short self-contained task and include parent_id='lead'. Example: $body=@{agent='codex';task='Create worker-proof.txt containing READY';cwd=(pwd).Path;parent_id='lead'}|ConvertTo-Json -Compress; Invoke-RestMethod "$env:ALETHE_AGENT_HOOKS_ENDPOINT/spawn" -Method Post -Headers @{'X-Alethe-Token'=$env:ALETHE_AGENT_HOOKS_TOKEN} -ContentType 'application/json' -Body $body. Keep task under 300 characters. Alethe injects the worker's completed response back into your terminal, so review it and send follow-up work through the same bridge or composer. Never claim a worker completed work until its response arrives. If a worker exists, do not perform its delegated task yourself or edit its files.`
 
-type SpawnPayload = {
-  agent?: string
-  task?: string
-  cwd?: string
-  mode?: 'exec' | 'interactive'
-  sandbox_id?: string
-  parent_id?: string
-  job_id?: string
-}
-
 const DEMO_NODES: Omit<SandboxNode, 'ptyId' | 'status' | 'lastMessage'>[] = [
   { id: 'lead', label: 'Planner Claude · Haiku · YOLO', role: 'planner', command: 'claude', extraArgs: ['--model', 'haiku', '--dangerously-skip-permissions', '--append-system-prompt', SPAWN_BRIDGE_PROMPT], x: 90, y: 24, width: 420, height: 300, color: 'var(--agent-claude)' },
 ]
@@ -84,7 +74,6 @@ const DEMO_NODES: Omit<SandboxNode, 'ptyId' | 'status' | 'lastMessage'>[] = [
 const exitCleanups = new Map<string, () => void>()
 const outputCleanups = new Map<string, () => void>()
 const appServerCleanups = new Map<string, () => void>()
-let spawnEventCleanup: UnlistenFn | null = null
 let hookEventCleanup: UnlistenFn | null = null
 let sandboxGeneration = 0
 
@@ -155,187 +144,12 @@ export const useAgentSandboxStore = create<AgentSandboxState>((set, get) => ({
       })),
     })
 
-    const generationCleanup = await listen<SpawnPayload>('agent-spawn', (event) => {
-      const payload = event.payload
-      if (generation !== sandboxGeneration || !payload.agent || (payload.cwd && normalizeSandboxPath(payload.cwd) !== normalizeSandboxPath(cwd))) return
-      const task = payload.task?.trim()
-      const isCodexAppServer = payload.agent === 'codex' && payload.mode !== 'interactive'
-      const automatedTaskArgs = task && payload.mode !== 'interactive'
-        ? payload.agent === 'codex'
-          ? undefined
-          : payload.agent === 'claude'
-            ? ['--model', 'haiku', '--dangerously-skip-permissions', '-p', task]
-            : undefined
-        : undefined
-      const node: SandboxNode = {
-        id: `spawned-${payload.agent}-${nanoid(6)}`,
-        label: isCodexAppServer ? 'Codex worker · app-server' : `Spawned ${payload.agent}`,
-        role: isCodexAppServer ? 'worker · persistent thread' : 'worker',
-        command: payload.agent as SandboxNode['command'],
-        x: 90 + get().nodes.length * 32,
-        y: 370,
-        width: 420,
-        height: 300,
-        color: payload.agent === 'codex' ? 'var(--agent-codex)' : 'var(--agent-claude)',
-        ptyId: null,
-        appServerId: isCodexAppServer ? `app-server-${nanoid(8)}` : undefined,
-        jobId: isCodexAppServer ? payload.job_id ?? `sandbox-job-${nanoid(10)}` : undefined,
-        transport: isCodexAppServer ? 'app-server' : 'pty',
-        parentId: payload.parent_id || 'lead',
-        initialInput: task && !automatedTaskArgs && payload.agent !== 'shell' ? task : undefined,
-        status: 'starting' as SandboxNodeStatus,
-        lastMessage: null,
-        output: '',
-        managed: true,
-      }
-      console.info('[sandbox] spawn request accepted', {
-        agent: payload.agent,
-        cwd: payload.cwd || cwd,
-        mode: payload.mode || 'exec',
-        taskLength: task?.length ?? 0,
-        automatedTask: Boolean(automatedTaskArgs || node.appServerId),
-      })
-      set((state) => ({ nodes: [...state.nodes, node] }))
-      void (async () => {
-        const ptyId = node.appServerId ? null : `sandbox-${node.id}`
-        try {
-          console.info('[sandbox] spawning worker PTY', {
-            ptyId,
-            agent: node.command,
-            cwd: payload.cwd || cwd,
-            extraArgs: automatedTaskArgs
-              ? [...automatedTaskArgs.slice(0, -1), `<task ${task?.length ?? 0} chars>`]
-              : (payload.agent === 'claude' ? ['--model', 'haiku'] : []),
-          })
-          if (ptyId) {
-            await spawnPty({
-              id: ptyId,
-              cols: 88,
-              rows: 24,
-              cwd: payload.cwd || cwd,
-              command: node.command === 'shell' ? undefined : node.command,
-              extraArgs: [
-                ...(automatedTaskArgs ?? (payload.agent === 'claude' ? ['--model', 'haiku', '--dangerously-skip-permissions'] : [])),
-                ...(payload.agent === 'claude' ? ['--settings', settingsPath] : []),
-              ],
-              env: { ALETHE_AGENT_HOOKS_ENDPOINT: endpoint, ALETHE_AGENT_HOOKS_TOKEN: token },
-            })
-          }
-          if (generation !== sandboxGeneration) {
-            if (ptyId) await killPty(ptyId).catch(() => {})
-            console.info('[sandbox] discarded stale worker PTY', { ptyId })
-            return
-          }
-          console.info('[sandbox] worker PTY ready', { ptyId, agent: node.command })
-          const unlisten = ptyId ? await listenPtyExit(ptyId, () => {
-            if (node.appServerId) void codexAppServerStop(node.appServerId).catch(() => {})
-            appServerCleanups.get(node.appServerId ?? '')?.()
-            appServerCleanups.delete(node.appServerId ?? '')
-            outputCleanups.get(ptyId)?.()
-            outputCleanups.delete(ptyId)
-            set((state) => ({ nodes: state.nodes.map((item) => item.ptyId === ptyId ? { ...item, status: 'done' } : item) }))
-          }) : null
-          if (ptyId && unlisten) exitCleanups.set(ptyId, unlisten)
-          set((state) => ({ nodes: state.nodes.map((item) => item.id === node.id ? { ...item, ptyId, cwd: payload.cwd || cwd, status: task ? 'working' : 'idle' } : item) }))
-          if (ptyId && node.command === 'shell' && task) {
-            window.setTimeout(() => {
-              void writeAgentMessage(ptyId, task).catch((error) => {
-                console.error('[sandbox] shell task relay failed', { ptyId, error })
-              })
-            }, 2_500)
-          }
-          if (node.appServerId) {
-            const appServerId = node.appServerId
-            let turnOutput = ''
-            let nextRequestId = 10
-            let activeTurnId: string | null = null
-            let initialTurnRequested = false
-            const cleanup = await listenCodexAppServer(appServerId, (event) => {
-              const method = typeof event.method === 'string' ? event.method : ''
-              const params = event.params && typeof event.params === 'object' ? event.params as Record<string, unknown> : {}
-              const result = event.result && typeof event.result === 'object' ? event.result as Record<string, unknown> : {}
-              const thread = result.thread && typeof result.thread === 'object' ? result.thread as Record<string, unknown> : null
-              const threadId = typeof thread?.id === 'string' ? thread.id : typeof params.threadId === 'string' ? params.threadId : null
-              if (threadId) set((state) => ({ nodes: state.nodes.map((item) => item.id === node.id ? { ...item, threadId } : item) }))
-              if (method === 'item/agentMessage/delta') {
-                const delta = typeof params.delta === 'string' ? params.delta : ''
-                turnOutput += delta
-                set((state) => ({ nodes: state.nodes.map((item) => item.id === node.id ? { ...item, status: 'working', lastMessage: delta || item.lastMessage, output: `${item.output ?? ''}${delta}`.slice(-16000) } : item) }))
-              }
-              if (method === 'turn/started') {
-                const turn = params.turn && typeof params.turn === 'object' ? params.turn as Record<string, unknown> : null
-                const startedTurnId = typeof turn?.id === 'string' ? turn.id : null
-                if (startedTurnId) {
-                  activeTurnId = startedTurnId
-                  set((state) => ({ nodes: state.nodes.map((item) => item.id === node.id ? { ...item, turnId: startedTurnId, status: 'working' } : item) }))
-                }
-              }
-              if (method === 'turn/completed') {
-                const completedTurn = params.turn && typeof params.turn === 'object' ? params.turn as Record<string, unknown> : null
-                const completedTurnId = typeof completedTurn?.id === 'string' ? completedTurn.id : null
-                if (activeTurnId && completedTurnId && completedTurnId !== activeTurnId) return
-                const reply = turnOutput.trim()
-                const parent = get().nodes.find((item) => item.id === node.parentId)
-                if (reply && parent?.ptyId) {
-                  const relay = `[Alethe reply from ${node.label}] ${reply}`
-                  void writeAgentMessage(parent.ptyId, relay).catch((error) => console.error('[sandbox] worker reply relay failed', error))
-                  set((state) => ({
-                    messages: [...state.messages, { id: nanoid(), from: node.id, to: parent.id, text: reply, createdAt: Date.now(), state: 'delivered' as const }].slice(-80),
-                  }))
-                }
-                turnOutput = ''
-                activeTurnId = null
-                set((state) => ({ nodes: state.nodes.map((item) => item.id === node.id ? { ...item, status: 'idle', output: `${item.output ?? ''}\n\n[Alethe] Turn completed. Ready for another message.\n` } : item) }))
-              }
-              if (method === 'item/commandExecution/requestApproval' || method === 'item/fileChange/requestApproval') {
-                const requestId = event.id
-                if (requestId !== undefined) void codexAppServerSend(appServerId, { id: requestId, result: { decision: 'accept' } }).catch(() => {})
-              }
-              if (event.id === 2 && threadId && task && !initialTurnRequested) {
-                initialTurnRequested = true
-                const requestId = nextRequestId++
-                void codexAppServerSend(appServerId, {
-                  id: requestId,
-                  method: 'turn/start',
-                  params: { threadId, input: [{ type: 'text', text: task }], approvalPolicy: 'never' },
-                }).catch((error) => console.error('[sandbox] app-server turn failed', error))
-              }
-              if (event.type === 'transport_error' || event.type === 'transport_closed') {
-                set((state) => ({ nodes: state.nodes.map((item) => item.id === node.id ? { ...item, status: 'error', lastMessage: 'Codex app-server connection closed', output: `${item.output ?? ''}\n\n[Alethe] Codex connection closed.\n` } : item) }))
-              }
-            })
-            appServerCleanups.set(appServerId, cleanup)
-            await codexAppServerStart(appServerId, payload.cwd || cwd)
-            await codexAppServerSend(appServerId, {
-              id: 2,
-              method: 'thread/start',
-              params: { cwd: payload.cwd || cwd, approvalPolicy: 'never', sandbox: 'danger-full-access' },
-            })
-          } else if (automatedTaskArgs && ptyId) {
-            let outputUnlisten: UnlistenFn | null = null
-            let outputTail = ''
-            outputUnlisten = await listenPtyData(ptyId, (chunk) => {
-              outputTail = `${outputTail}${chunk}`.slice(-512)
-              const failed = /not inside a trusted directory/i.test(outputTail)
-              const completed = /tokens used\b/i.test(outputTail)
-              if (!failed && !completed) return
-              set((state) => ({ nodes: state.nodes.map((item) => item.ptyId === ptyId ? { ...item, status: failed ? 'error' : 'done' } : item) }))
-              outputUnlisten?.()
-              outputCleanups.delete(ptyId)
-            })
-            outputCleanups.set(ptyId, outputUnlisten)
-          }
-        } catch (error) {
-          console.error('[sandbox] worker PTY failed', { ptyId, agent: node.command, error })
-          set((state) => ({ nodes: state.nodes.map((item) => item.id === node.id ? { ...item, status: 'error' } : item) }))
-        }
-      })()
-    })
-    if (generation !== sandboxGeneration) {
-      generationCleanup()
-      return
-    }
-    spawnEventCleanup = generationCleanup
+    // Lord D1: o evento `agent-spawn` foi apagado pelo contrato v1 do `/spawn`
+    // (substituído por `lord-agent-spawn-v1`, consumido só por
+    // `useAgentSpawnListener`). O listener que existia aqui nunca mais dispara —
+    // removido junto com `SpawnPayload`, `spawnEventCleanup` e o fluxo de
+    // negociação de app-server do Codex que só ele alimentava. O restante da
+    // sandbox (demo `lead`, `agent-hook`, mensageria entre nodes) continua de pé.
     hookEventCleanup = await listen<Record<string, unknown>>('agent-hook', (event) => {
       if (generation !== sandboxGeneration) return
       const payload = event.payload
@@ -398,8 +212,6 @@ export const useAgentSandboxStore = create<AgentSandboxState>((set, get) => ({
 
   stop: () => {
     sandboxGeneration += 1
-    spawnEventCleanup?.()
-    spawnEventCleanup = null
     hookEventCleanup?.()
     hookEventCleanup = null
     outputCleanups.forEach((cleanup) => cleanup())
