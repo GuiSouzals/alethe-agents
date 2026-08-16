@@ -298,6 +298,15 @@ pub fn pty_exists(sessions: State<'_, PtySessions>, id: String) -> Result<bool, 
     Ok(sessions.contains_key(&id))
 }
 
+// Lord ADR-0013 D3 camada 1: pura, pra ficar testável sem abrir PTY de verdade.
+// Ausência (`None`, terminal sem conjunto resolvido ainda) vira string vazia —
+// "não sei" e "não despacha para ninguém" (D2, conjunto `[]`) são
+// indistinguíveis nesta string de propósito; quem precisa da distinção
+// exata é a leitura de `projects.json` em `agent_events.rs`, não o processo.
+fn runtimes_permitidos_env_value(runtimes: Option<Vec<String>>) -> String {
+    runtimes.unwrap_or_default().join(",")
+}
+
 #[tauri::command]
 pub async fn spawn_pty(
     app: AppHandle,
@@ -315,6 +324,12 @@ pub async fn spawn_pty(
     // env extra só deste PTY (ex.: CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 no
     // canvas) — nunca polui o ambiente global nem outros terminais.
     env: Option<std::collections::HashMap<String, String>>,
+    // Lord ADR-0013 D3 camada 1: `runtimesPermitidos` (D2) da aba, resolvido
+    // pelo frontend antes do spawn. Vira LORD_RUNTIMES_PERMITIDOS logo abaixo,
+    // junto de LORD_CHASSI/LORD_TERMINAL_ID — não entra em `env` (extra_env
+    // genérico) de propósito, pelo mesmo motivo dos outros dois: nenhum
+    // chamador deveria conseguir confundir isto com env arbitrário do PTY.
+    runtimes_permitidos: Option<Vec<String>>,
 ) -> Result<SpawnPtyResponse, String> {
     // `openpty`/resolução do launcher/`spawn_command` são chamadas de SO de
     // verdade (ConPTY, criação de processo) — podem demorar bem mais que o
@@ -409,6 +424,17 @@ pub async fn spawn_pty(
         // declarar isso (ver `scripts/hooks/exige-sessao-lord.js` no lord-brain).
         command.env("LORD_CHASSI", "1");
         command.env("LORD_TERMINAL_ID", &id);
+        // Lord ADR-0013 D3 camada 1: canal de leitura do conjunto de runtimes
+        // permitidos (D2) — mesmo lugar e mesma razão do marcador de
+        // proveniência acima: nasce DEPOIS do `extra_env`, então nenhum
+        // chamador do frontend sobrescreve isto por acidente. NÃO é fronteira
+        // de segurança, igual aos dois de cima: quem já tem o terminal pode
+        // forjar a env var; a fronteira de verdade é a recusa server-side em
+        // `agent_events.rs` (D3 camada 2).
+        command.env(
+            "LORD_RUNTIMES_PERMITIDOS",
+            runtimes_permitidos_env_value(runtimes_permitidos),
+        );
         let resolve_ms = resolve_started.elapsed().as_millis();
         let builder_ms = spawn_started.elapsed().as_millis();
         let effective_path_preview = command
@@ -850,6 +876,8 @@ pub async fn restart_pty(
     extra_args: Option<Vec<String>>,
     launcher_override: Option<String>,
     env: Option<HashMap<String, String>>,
+    // Lord ADR-0013 D3 camada 1: reinjeta o mesmo conjunto no processo novo.
+    runtimes_permitidos: Option<Vec<String>>,
 ) -> Result<SpawnPtyResponse, String> {
     // A fase de matar o processo antigo (taskkill pela árvore inteira) +
     // apagar o scrollback antigo rodava direto no corpo async, fora de
@@ -900,6 +928,7 @@ pub async fn restart_pty(
         extra_args,
         launcher_override,
         env,
+        runtimes_permitidos,
     )
     .await
 }
@@ -1709,6 +1738,23 @@ mod tests {
     #[test]
     fn scrollback_cap_keeps_long_agent_chats() {
         assert!(SCROLLBACK_CAP_BYTES >= 4 * 1024 * 1024);
+    }
+
+    // Lord ADR-0013 D3 camada 1: oráculos do valor injetado em LORD_RUNTIMES_PERMITIDOS.
+    #[test]
+    fn joins_multiple_runtimes_with_a_comma() {
+        let runtimes = Some(vec!["codex".to_string(), "claude".to_string()]);
+        assert_eq!(runtimes_permitidos_env_value(runtimes), "codex,claude");
+    }
+
+    #[test]
+    fn an_explicit_empty_set_becomes_an_empty_string_not_a_missing_var() {
+        assert_eq!(runtimes_permitidos_env_value(Some(vec![])), "");
+    }
+
+    #[test]
+    fn a_missing_set_also_becomes_an_empty_string() {
+        assert_eq!(runtimes_permitidos_env_value(None), "");
     }
 
     #[test]

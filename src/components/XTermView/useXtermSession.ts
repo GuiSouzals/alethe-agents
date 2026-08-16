@@ -129,6 +129,9 @@ export function useXtermSession(params: {
   initialInput?: string
   sessionId?: string
   env?: Record<string, string>
+  /** Lord ADR-0013 D3 camada 1: runtimes permitidos (D2) desta aba, para o
+   * backend injetar `LORD_RUNTIMES_PERMITIDOS` no ambiente do PTY. */
+  runtimesPermitidos?: string[]
   graphifyRepo?: string | null
   /** Gate de Conclusão de Planejamento GSD: projeto com o monitoramento
    * ligado. Presente + `command === 'opencode'`: instala automaticamente o
@@ -198,6 +201,7 @@ export function useXtermSession(params: {
     initialInput,
     sessionId,
     env,
+    runtimesPermitidos,
     graphifyRepo,
     gsdWatcherEnabled,
     trustSessionId,
@@ -1149,6 +1153,7 @@ export function useXtermSession(params: {
             extraArgs: spawnArgs,
             launcherOverride,
             env: preparedRuntime.env,
+            runtimesPermitidos,
           })
         } finally {
           releaseSpawnSlot()

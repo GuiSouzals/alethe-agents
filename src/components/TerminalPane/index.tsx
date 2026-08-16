@@ -294,6 +294,7 @@ export const TerminalPane = memo(function TerminalPane({
         cwd: restartCwd || undefined,
         extraArgs: launch.args,
         env: preparedRuntime.env,
+        runtimesPermitidos: activeTab.runtimesPermitidos,
       })
       if (launch.sessionId) {
         // XTermView usa a identidade estável da sub-tab como chave; manter a
@@ -644,6 +645,7 @@ export const TerminalPane = memo(function TerminalPane({
                     initialInputGate={initialInputGate}
                     initialInputOrigin={activeTab.orchestrationOrigin}
                     runtimeProfile={activeTab.runtimeProfile}
+                    runtimesPermitidos={activeTab.runtimesPermitidos}
                     sessionId={activeTab.sessionId}
                     graphifyRepo={graphifyRepo}
                     gsdWatcherEnabled={gsdWatcherEnabled}

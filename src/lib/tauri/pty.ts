@@ -12,6 +12,14 @@ export type SpawnPtyArgs = {
   launcherOverride?: string
   /** Env extra só deste PTY (não vaza pra outros terminais). */
   env?: Record<string, string>
+  /**
+   * Lord ADR-0013 D3 camada 1: runtimes que ESTA aba pode acionar (D2),
+   * resolvido antes do spawn. O backend injeta `LORD_RUNTIMES_PERMITIDOS`
+   * (lista separada por vírgula) no mesmo lugar de `LORD_CHASSI`/
+   * `LORD_TERMINAL_ID` — canal de leitura, não fronteira; a recusa de
+   * verdade é server-side em `/spawn` (D3 camada 2).
+   */
+  runtimesPermitidos?: string[]
 }
 
 export async function spawnPty(args: SpawnPtyArgs): Promise<{ id: string }> {
@@ -24,6 +32,7 @@ export async function spawnPty(args: SpawnPtyArgs): Promise<{ id: string }> {
     extraArgs: args.extraArgs,
     launcherOverride: args.launcherOverride,
     env: args.env,
+    runtimesPermitidos: args.runtimesPermitidos,
   })
 }
 
@@ -86,6 +95,7 @@ export async function restartPty(args: SpawnPtyArgs & { id: string }): Promise<{
     extraArgs: args.extraArgs,
     launcherOverride: args.launcherOverride,
     env: args.env,
+    runtimesPermitidos: args.runtimesPermitidos,
   })
 }
 
