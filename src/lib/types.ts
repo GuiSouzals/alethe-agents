@@ -131,6 +131,16 @@ export type SubTab = {
   runtimeProfile?: AgentRuntimeProfile
   /** Lord F3: Capability persistida; registros antigos normalizam para `solo`. */
   orchestrationMode: OrchestrationMode
+  /**
+   * Lord ADR-0013 D2: runtimes que ESTE terminal pode acionar via `/spawn`
+   * quando ele mesmo orquestra (Codex/Cursor/Claude chamando outro provider).
+   * Default na criação: só o próprio tipo — abrir um terminal Codex nunca
+   * concede Claude e Cursor por omissão. Array vazio é "não despacha para
+   * ninguém", nunca "todos" (D3 camada 2 recusa server-side em cima disto).
+   * Só o usuário edita, pela interface; o agente nunca amplia o próprio
+   * conjunto (D2).
+   */
+  runtimesPermitidos: AgentType[]
   /** Lord F3: Origem declarada do despacho, sem conteúdo de prompt ou julgamento. */
   orchestrationOrigin?: string
   /** Lord F3: IDs estáveis mínimos para retomar, correlacionar e focar a execução. */

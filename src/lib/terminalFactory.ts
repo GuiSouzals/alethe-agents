@@ -72,6 +72,8 @@ export function makeDefaultTerminal(args: {
     orchestrationParentTerminalId?: string
     orchestrationInternalAgentId?: string
     automatedSpawn?: boolean
+    /** Lord ADR-0013 D2: default restritivo — omitido vira só o próprio tipo. */
+    runtimesPermitidos?: AgentType[]
   }
   worktreeAgentId?: string
   gsdSyncViewer?: boolean
@@ -107,6 +109,9 @@ export function makeDefaultTerminal(args: {
         orchestrationParentTerminalId: args.firstTab.orchestrationParentTerminalId,
         orchestrationInternalAgentId: args.firstTab.orchestrationInternalAgentId,
         automatedSpawn: args.firstTab.automatedSpawn,
+        // Lord ADR-0013 D2: default restritivo — só o runtime da própria aba.
+        // Conjunto vazio explícito (`[]`) é respeitado, nunca substituído.
+        runtimesPermitidos: args.firstTab.runtimesPermitidos ?? [args.firstTab.type],
       },
     ],
   }

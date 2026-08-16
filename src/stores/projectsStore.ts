@@ -305,6 +305,8 @@ export type ProjectsState = ProjectsFile & {
       orchestrationJobId?: string
       orchestrationParentTerminalId?: string
       orchestrationInternalAgentId?: string
+      /** Lord ADR-0013 D2: default restritivo — omitido vira só o próprio tipo. */
+      runtimesPermitidos?: AgentType[]
     },
   ) => SubTab
   closeSubTab: (projectId: string, terminalId: string, tabId: string) => void

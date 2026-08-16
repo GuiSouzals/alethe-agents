@@ -150,6 +150,8 @@ export function createSubTabsSlice({ updateTerminal, updateSubTab }: SliceCtx): 
         orchestrationJobId: args.orchestrationJobId,
         orchestrationParentTerminalId: args.orchestrationParentTerminalId,
         orchestrationInternalAgentId: args.orchestrationInternalAgentId,
+        // Lord ADR-0013 D2: default restritivo — só o runtime da própria aba.
+        runtimesPermitidos: args.runtimesPermitidos ?? [args.type],
       }
       updateTerminal(projectId, terminalId, (t) => ({
         ...t,

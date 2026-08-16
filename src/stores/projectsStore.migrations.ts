@@ -9,8 +9,10 @@ import { nanoid } from 'nanoid'
 import { normalizeEnabledFeatures } from '../lib/features'
 import { normalizeTodoTags, normalizeTodoTitle } from '../lib/todos'
 import {
+  ALL_AGENT_TYPES,
   DEFAULT_PREFERENCES,
   EMPTY_PROJECTS_FILE,
+  type AgentType,
   type Group,
   type Preferences,
   type Project,
@@ -111,6 +113,28 @@ export function normalizePreferences(raw: LegacyPreferences | undefined): Prefer
   }
 }
 
+const VALID_AGENT_TYPES = new Set<string>(ALL_AGENT_TYPES)
+
+/**
+ * Lord ADR-0013 D2: backfill de `runtimesPermitidos`. Ausência (arquivo
+ * anterior à D2) vira só o próprio tipo da aba — nunca "todos". Um array já
+ * presente é filtrado a tipos válidos e deduplicado, mas um `[]` explícito é
+ * preservado como está: conjunto vazio é "não despacha para ninguém", uma
+ * escolha do usuário, não um dado faltando.
+ */
+export function normalizeRuntimesPermitidos(raw: unknown, ownType: AgentType): AgentType[] {
+  if (!Array.isArray(raw)) return [ownType]
+  const seen = new Set<AgentType>()
+  const result: AgentType[] = []
+  for (const item of raw) {
+    if (typeof item === 'string' && VALID_AGENT_TYPES.has(item) && !seen.has(item as AgentType)) {
+      seen.add(item as AgentType)
+      result.push(item as AgentType)
+    }
+  }
+  return result
+}
+
 // Lord F3: Normaliza capability/origem/IDs sem carregar prompt efêmero de arquivos antigos.
 export function normalizeOrchestrationProjects(projects: readonly any[]): Project[] {
   return projects.map((project) => ({
@@ -122,6 +146,8 @@ export function normalizeOrchestrationProjects(projects: readonly any[]): Projec
         return {
           ...tab,
           orchestrationMode: tab.orchestrationMode === 'team' ? 'team' : 'solo',
+          // Lord ADR-0013 D2: backfill — aba pré-existente recebe só o próprio tipo.
+          runtimesPermitidos: normalizeRuntimesPermitidos(tab.runtimesPermitidos, tab.type),
         }
       }),
     })),
