@@ -561,6 +561,7 @@ export function createProjectsSlice({ set, get, update, updateProject }: SliceCt
                   cwd: info.path,
                   extraArgs: launch.args,
                   env: runtime.env,
+                  runtimesPermitidos: tab.runtimesPermitidos,
                 })
                 window.dispatchEvent(
                   new CustomEvent('alethe:terminal-resize-request', { detail: { ptyId: tab.ptyId } }),

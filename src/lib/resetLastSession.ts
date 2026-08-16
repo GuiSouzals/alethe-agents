@@ -134,6 +134,7 @@ type ResumeTarget = {
   agent: AgentType
   cwd: string
   extraArgs: string[]
+  runtimesPermitidos: AgentType[]
 }
 
 /** Coleta todos os painéis de agente atualmente vivos na workspace. */
@@ -155,6 +156,7 @@ function collectLivePanes(): ResumeTarget[] {
           agent: tab.type,
           cwd: (tab.cwd || terminal.cwd || '').trim(),
           extraArgs: tab.extraArgs ?? [],
+          runtimesPermitidos: tab.runtimesPermitidos,
         })
       }
     }
@@ -218,6 +220,7 @@ export async function resetLastSession(): Promise<ResetLastSessionResult> {
         command: target.agent,
         cwd: cwd || undefined,
         extraArgs,
+        runtimesPermitidos: target.runtimesPermitidos,
       })
       window.dispatchEvent(
         new CustomEvent('alethe:terminal-resize-request', { detail: { ptyId: target.ptyId } }),

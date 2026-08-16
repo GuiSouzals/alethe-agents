@@ -380,6 +380,7 @@ export function createSidebarMenus(deps: SidebarMenuDeps) {
         cwd: activeTab.cwd || undefined,
         extraArgs: launch.args,
         env: runtime.env,
+        runtimesPermitidos: activeTab.runtimesPermitidos,
       })
       window.dispatchEvent(
         new CustomEvent('alethe:terminal-resize-request', { detail: { ptyId: activeTab.ptyId } }),

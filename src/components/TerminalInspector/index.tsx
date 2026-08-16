@@ -141,6 +141,7 @@ function InspectorBody({ projectId, terminal }: { projectId: string; terminal: T
         cwd: activeTab.cwd || undefined,
         extraArgs: launch.args,
         env: preparedRuntime.env,
+        runtimesPermitidos: activeTab.runtimesPermitidos,
       })
       window.dispatchEvent(
         new CustomEvent('alethe:terminal-resize-request', { detail: { ptyId: activeTab.ptyId } }),
@@ -318,6 +319,7 @@ function InspectorBody({ projectId, terminal }: { projectId: string; terminal: T
           cwd={cwd}
           agentType={activeTab.type}
           extraArgs={activeTab.extraArgs}
+          runtimesPermitidos={activeTab.runtimesPermitidos}
         />
       ) : null}
     </section>

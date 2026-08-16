@@ -17,6 +17,7 @@ type Props = {
   cwd: string
   agentType: AgentType
   extraArgs?: string[]
+  runtimesPermitidos?: AgentType[]
 }
 
 function formatRelative(ms: number, t: TFunction, language: Locale): string {
@@ -45,6 +46,7 @@ export function ClaudeHistoryModal({
   cwd,
   agentType,
   extraArgs,
+  runtimesPermitidos,
 }: Props) {
   const t = useT()
   const language = useProjectsStore((s) => s.preferences.language)
@@ -97,6 +99,7 @@ export function ClaudeHistoryModal({
         command: agentCliCommand(agentType),
         cwd,
         extraArgs: newExtraArgs,
+        runtimesPermitidos,
       })
       window.dispatchEvent(new CustomEvent('alethe:terminal-resize-request', { detail: { ptyId } }))
 
