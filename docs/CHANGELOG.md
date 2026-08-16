@@ -12,6 +12,7 @@ Mudanças relevantes do **Alethe** para quem usa o app. Formato inspirado em
 
 ### Adicionado
 
+- **`/spawn` now enforces the origin terminal's provider allowlist server-side (Lord ADR-0013 D3, layer 2).** When the request declares `parent_terminal_id`, the Rust listener reads that terminal's persisted `runtimesPermitidos` and rejects any `provider` outside it with HTTP 403 and `reason: "provider_nao_permitido"` — before the spawn event is ever emitted. This is the second, non-bypassable check; the existing frontend allowlist (`resolveSpawnTarget.ts`) alone was already shown insufficient once.
 - **Developer-mode orchestration visibility (Lord F3).** External dispatches now open real solo terminals with persisted origin/correlation IDs, show neutral lifecycle labels, keep prompts and live output in the normal xterm, expose safe parent/child focus controls, and project provider-emitted internal subagents as read-only cards. The ephemeral run reducer rejects duplicate and regressive events, while prompts and judgment never enter `projects.json`; team and animated modes remain gated off.
 - **Cursor Agent as a first-class CLI.** New agent type with resolver (`cursor-agent` / `agent`), Windows shim promotion to `.cmd`, interactive launch adapter, theme token, icon, Home quick-start, terminal/sub-tab pickers, and preferences toggle.
 - **Honest Cursor availability card and topbar pill (D3).** Shows CLI connected / missing / sign-in state and a link to the Cursor dashboard — never a local usage percentage or progress bar.

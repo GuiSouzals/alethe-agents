@@ -6,13 +6,16 @@
 // frontend como evento Tauri `agent-hook`. Fluxo novo e isolado — não toca
 // em PTY, projects nem em nenhum fluxo existente.
 
+use std::fs;
 use std::io::Read;
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::paths::projects_file_path;
 use crate::spawn_state::{SpawnRegistry, SpawnResponseV1, SpawnStatus};
 
 const HOST: &str = "127.0.0.1";
@@ -299,7 +302,69 @@ fn spawn_http_status(response: &SpawnResponseV1) -> u16 {
         SpawnStatus::Rejected if response.reason.as_deref() == Some("no_consumer") => 503,
         SpawnStatus::Rejected if response.reason.as_deref() == Some("no_matching_project") => 422,
         SpawnStatus::Rejected if response.reason.as_deref() == Some("terminal_creation_failed") => 500,
+        // Lord D3 camada 2 (ADR-0013): o pedido é bem formado e o alvo existe,
+        // mas o terminal de origem não tem esse provider no próprio conjunto —
+        // é recusa de autorização, não erro de validação (400).
+        SpawnStatus::Rejected if response.reason.as_deref() == Some("provider_nao_permitido") => 403,
         SpawnStatus::Rejected => 400,
+    }
+}
+
+// Lord D3 camada 2 (ADR-0013): pura — recebe o `projects.json` já lido, sem
+// tocar em disco, pra ficar testável sem AppHandle. Percorre o JSON como
+// `Value` de propósito: o Rust trata o arquivo como opaque (ver comentário em
+// `projects.rs::load_projects`), então o schema de `SubTab` evolui só no TS.
+// Casa pelo `ptyId` porque é o identificador que o processo em execução
+// conhece de si mesmo (`LORD_TERMINAL_ID`, injetado em `pty.rs` com o mesmo
+// valor usado como `id` do PTY).
+fn extract_runtimes_permitidos(projects_json: &str, terminal_id: &str) -> Option<Vec<String>> {
+    let parsed: Value = serde_json::from_str(projects_json).ok()?;
+    let projects = parsed.get("projects")?.as_array()?;
+    for project in projects {
+        let Some(terminals) = project.get("terminals").and_then(Value::as_array) else {
+            continue;
+        };
+        for terminal in terminals {
+            let Some(tabs) = terminal.get("tabs").and_then(Value::as_array) else {
+                continue;
+            };
+            for tab in tabs {
+                if tab.get("ptyId").and_then(Value::as_str) != Some(terminal_id) {
+                    continue;
+                }
+                return tab
+                    .get("runtimesPermitidos")
+                    .and_then(Value::as_array)
+                    .map(|list| {
+                        list.iter()
+                            .filter_map(|item| item.as_str().map(str::to_string))
+                            .collect()
+                    });
+            }
+        }
+    }
+    None
+}
+
+// Lord D3 camada 2 (ADR-0013): lê `projects.json` do perfil ativo e devolve o
+// conjunto persistido (D2) da aba cujo `ptyId` é `terminal_id`. `None` cobre
+// arquivo ausente, terminal desconhecido e dado anterior à D2 (sem o campo) —
+// o chamador decide o default de segurança, ver `provider_allowed`.
+fn runtimes_permitidos_for_terminal(app: &AppHandle, terminal_id: &str) -> Option<Vec<String>> {
+    let path = projects_file_path(app).ok()?;
+    let content = fs::read_to_string(path).ok()?;
+    extract_runtimes_permitidos(&content, terminal_id)
+}
+
+// Lord D3 camada 2 (ADR-0013): decisão pura e testável. `None` (terminal de
+// origem desconhecido, sem `parent_terminal_id`, ou dado pré-D2 sem o campo)
+// não bloqueia — o gate fica completo quando toda aba carrega
+// `runtimesPermitidos` (backfill da D2). Bloquear nesse caso hoje quebraria
+// todo despacho existente, que ainda não declara o campo nem manda o vínculo.
+fn provider_allowed(provider: &str, allowed: Option<&[String]>) -> bool {
+    match allowed {
+        None => true,
+        Some(list) => list.iter().any(|item| item == provider),
     }
 }
 
@@ -381,6 +446,24 @@ pub fn start_listener(app: AppHandle) {
                         continue;
                     }
                 };
+
+                // Lord D3 camada 2 (ADR-0013): terceira verificação da rota, depois de
+                // token e forma do corpo — o provider precisa estar no conjunto que o
+                // usuário liberou para o terminal de origem (`parent_terminal_id`).
+                // Fronteira executável: recusa aqui, não só no prompt do agente.
+                if let Some(parent_terminal_id) = payload.parent_terminal_id.as_deref() {
+                    let allowed = runtimes_permitidos_for_terminal(&app, parent_terminal_id);
+                    if !provider_allowed(&payload.provider, allowed.as_deref()) {
+                        let response = SpawnResponseV1::rejected(
+                            payload.request_id,
+                            payload.provider,
+                            "provider_nao_permitido",
+                        );
+                        respond_spawn(request, response);
+                        continue;
+                    }
+                }
+
                 let registry = app.state::<SpawnRegistry>();
                 let (created, received) = registry.begin(&payload.request_id, &payload.provider);
 
@@ -544,6 +627,86 @@ mod tests {
         assert_eq!(response.reason.as_deref(), Some("invalid_provider"));
         assert_eq!(response.request_id, "request-unknown");
         assert_eq!(response.provider, "gemini");
+    }
+
+    // Lord D3 camada 2 (ADR-0013): oráculos da recusa por conjunto de terminal.
+    #[test]
+    fn rejects_a_provider_outside_the_origin_terminal_allowlist() {
+        let allowed = vec!["codex".to_string()];
+        assert!(!provider_allowed("claude", Some(&allowed)));
+    }
+
+    #[test]
+    fn accepts_a_provider_inside_the_origin_terminal_allowlist() {
+        let allowed = vec!["codex".to_string(), "claude".to_string()];
+        assert!(provider_allowed("claude", Some(&allowed)));
+    }
+
+    #[test]
+    fn an_empty_allowlist_blocks_every_provider() {
+        let allowed: Vec<String> = vec![];
+        assert!(!provider_allowed("shell", Some(&allowed)));
+    }
+
+    #[test]
+    fn unknown_origin_terminal_does_not_block_until_d2_backfills_the_field() {
+        assert!(provider_allowed("claude", None));
+    }
+
+    #[test]
+    fn extracts_the_allowlist_of_the_matching_sub_tab_by_pty_id() {
+        let projects_json = r#"{
+            "projects": [{
+                "terminals": [{
+                    "tabs": [
+                        { "ptyId": "terminal-other", "runtimesPermitidos": ["shell"] },
+                        { "ptyId": "terminal-1", "runtimesPermitidos": ["codex", "claude"] }
+                    ]
+                }]
+            }]
+        }"#;
+
+        let allowed = extract_runtimes_permitidos(projects_json, "terminal-1");
+
+        assert_eq!(allowed, Some(vec!["codex".to_string(), "claude".to_string()]));
+    }
+
+    #[test]
+    fn extract_returns_none_for_an_unknown_terminal_id() {
+        let projects_json = r#"{"projects":[{"terminals":[{"tabs":[
+            { "ptyId": "terminal-1", "runtimesPermitidos": ["claude"] }
+        ]}]}]}"#;
+
+        assert_eq!(extract_runtimes_permitidos(projects_json, "terminal-ghost"), None);
+    }
+
+    #[test]
+    fn extract_returns_none_for_a_pre_d2_tab_without_the_field() {
+        let projects_json = r#"{"projects":[{"terminals":[{"tabs":[
+            { "ptyId": "terminal-1" }
+        ]}]}]}"#;
+
+        assert_eq!(extract_runtimes_permitidos(projects_json, "terminal-1"), None);
+    }
+
+    #[test]
+    fn provider_not_permitted_maps_to_http_403() {
+        let response = SpawnResponseV1::rejected("request-1", "claude", "provider_nao_permitido");
+        assert_eq!(spawn_http_status(&response), 403);
+    }
+
+    // Lord D3 camada 2 (ADR-0013): decisão de ponta a ponta, ainda pura — composição
+    // de `extract_runtimes_permitidos` + `provider_allowed` como o handler faz.
+    #[test]
+    fn end_to_end_decision_blocks_a_provider_the_origin_terminal_never_declared() {
+        let projects_json = r#"{"projects":[{"terminals":[{"tabs":[
+            { "ptyId": "terminal-1", "runtimesPermitidos": ["codex"] }
+        ]}]}]}"#;
+
+        let allowed = extract_runtimes_permitidos(projects_json, "terminal-1");
+
+        assert!(!provider_allowed("claude", allowed.as_deref()));
+        assert!(provider_allowed("codex", allowed.as_deref()));
     }
 
     #[test]

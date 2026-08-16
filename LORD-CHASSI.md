@@ -123,6 +123,7 @@ com `invalid_request`. Não há tradução do payload antigo.
 | `empty_task` | `:260-266` | `task` vazia |
 | `invalid_origin` | `:267-273` | `origin` vazia |
 | `missing_target` | `:284-290` | nem `cwd` nem `project_id` |
+| `provider_nao_permitido` | ADR-0013 D3 camada 2, `agent_events.rs::provider_allowed` | `provider` fora do `runtimesPermitidos` (D2) do terminal em `parent_terminal_id` — **403**, não 400 |
 | `method_not_allowed` | `:371-375` | `/spawn` chamado sem `POST` |
 | `emit_failed` | `:404-412` | o `emit` do evento Tauri falhou |
 | `no_consumer` | `spawn_state.rs:177-180` | ninguém reivindicou o pedido dentro do prazo de 2s (`agent_events.rs:23`) |
@@ -139,6 +140,7 @@ os dois casos que nem chegam à função:
 | **202** | `status` `received` — pedido reivindicado por um consumidor, ainda sem aba confirmada |
 | **400** | qualquer `rejected` de validação (todos os `reason` acima que não estejam nas linhas seguintes) |
 | **401** | token ausente ou errado — antes do roteamento, corpo vazio |
+| **403** | `rejected` com `provider_nao_permitido` (ADR-0013 D3 camada 2) |
 | **404** | `POST /codex` e qualquer `/spawn/...` |
 | **422** | `rejected` com `no_matching_project` |
 | **500** | `rejected` com `terminal_creation_failed` |
