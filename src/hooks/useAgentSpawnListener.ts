@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event'
 import { useEffect } from 'react'
 
 import { getLocale, translate } from '../lib/i18n'
-import { AGENT_TYPE_LABELS } from '../lib/types'
+import { AGENT_TYPE_LABELS, type AgentType } from '../lib/types'
 import { effectiveOrchestrationPresentation, type OrchestrationEvent } from '../lib/orchestration'
 import { useOrchestrationStore } from '../stores/orchestrationStore'
 import { useProjectsStore } from '../stores/projectsStore'
@@ -185,6 +185,63 @@ export function useAgentSpawnListener(hydrated: boolean) {
         },
         onError: (error) => console.error('[Lord D1] Could not create agent terminal', error),
       }).catch((error) => console.error('[Lord D1] Could not process spawn request', error))
+    })
+
+    return () => {
+      void unlistenPromise.then((unlisten) => unlisten())
+    }
+  }, [hydrated])
+}
+
+// Lord D3 camada 2 (ADR-0013): payload do evento que o Rust emite quando `/spawn`
+// recusa um provider fora do conjunto do terminal de origem.
+export type SpawnRejectedPayload = {
+  jobId: string
+  requestId: string
+  provider: string
+  origin: string
+  parentTerminalId: string
+  reason: string
+}
+
+// Lord D4 (ADR-0013, etapa 3c): a resposta HTTP da recusa vai pro processo que
+// chamou /spawn, não pra tela — sem este listener a aba de origem nunca saberia
+// que a tentativa foi bloqueada (falha silenciosa, que o ADR proíbe). Registra
+// a recusa como um run 'failed' (aparece no painel "Agentes", D4 "durante"/
+// "depois") e mostra um aviso dizendo qual botão resolve.
+export function useSpawnRejectionListener(hydrated: boolean) {
+  useEffect(() => {
+    if (!hydrated) return
+
+    const unlistenPromise = listen<SpawnRejectedPayload>('lord-spawn-rejected', (event) => {
+      const { jobId, requestId, provider, origin, parentTerminalId, reason } = event.payload
+      const locale = getLocale()
+      const agent = provider as AgentType
+      const providerLabel = AGENT_TYPE_LABELS[agent] ?? provider
+
+      useOrchestrationStore.getState().recordEvent({
+        eventId: `${jobId}:failed`,
+        type: 'failed',
+        runId: jobId,
+        requestId,
+        jobId,
+        provider: agent,
+        origin,
+        source: 'external_spawn',
+        occurredAt: Date.now(),
+        parentTerminalId,
+        failureReason: reason,
+        liveOutput: 'unavailable',
+      })
+
+      useUiStore.getState().pushToast({
+        title: translate(locale, 'orchestration.toast.blockedTitle', { provider: providerLabel }),
+        body: translate(locale, 'orchestration.toast.blockedBody', {
+          origin,
+          provider: providerLabel,
+        }),
+        agent,
+      })
     })
 
     return () => {

@@ -7,6 +7,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
+  Share2,
   Trash2,
   X,
 } from 'lucide-react'
@@ -434,6 +435,40 @@ export const TerminalPane = memo(function TerminalPane({
                 disabled={terminal.tabs.length > 1}
               >
                 {effectiveLaneVisible ? <PanelLeftClose size={12} /> : <PanelLeftOpen size={12} />}
+              </button>
+              {/* Lord ADR-0013 D4 (etapa 3b): indicador clicável — mostra o que este
+                  terminal pode acionar via /spawn sem precisar abrir menu, e abre o
+                  editor. Só o usuário muda o conjunto (D2: agente nunca amplia). */}
+              <button
+                type="button"
+                className={styles.action}
+                onClick={() =>
+                  activeTab &&
+                  openModal('runtimesPermitidos', {
+                    projectId,
+                    terminalId: terminal.id,
+                    tabId: activeTab.id,
+                  })
+                }
+                title={t('ui.terminal.runtimesPermitidosTitle', {
+                  list:
+                    activeTab && activeTab.runtimesPermitidos.length > 0
+                      ? activeTab.runtimesPermitidos.map((agent) => AGENT_TYPE_LABELS[agent]).join(', ')
+                      : t('ui.terminal.runtimesPermitidosNone'),
+                })}
+                aria-label={t('ui.terminal.runtimesPermitidos')}
+                disabled={!activeTab}
+              >
+                <Share2 size={12} />
+                {activeTab ? (
+                  <span
+                    className={`${styles.runtimesBadge} ${
+                      activeTab.runtimesPermitidos.length === 0 ? styles.runtimesBadgeEmpty : ''
+                    }`}
+                  >
+                    {activeTab.runtimesPermitidos.length}
+                  </span>
+                ) : null}
               </button>
               <button
                 type="button"

@@ -128,6 +128,7 @@ type SubTabsSlice = Pick<
   | 'setSubTabCompletionUnread'
   | 'setSubTabSessionId'
   | 'setSubTabInitialInput'
+  | 'setSubTabRuntimesPermitidos'
 >
 
 export function createSubTabsSlice({ updateTerminal, updateSubTab }: SliceCtx): SubTabsSlice {
@@ -218,6 +219,14 @@ export function createSubTabsSlice({ updateTerminal, updateSubTab }: SliceCtx): 
 
     setSubTabInitialInput: (projectId, terminalId, tabId, initialInput) =>
       updateSubTab(projectId, terminalId, tabId, (s) => ({ ...s, initialInput })),
+
+    // Lord ADR-0013 D2: só esta ação muda o conjunto — nunca o próprio agente.
+    // Dedupe defensivo; conjunto vazio é respeitado ("não despacha para ninguém").
+    setSubTabRuntimesPermitidos: (projectId, terminalId, tabId, runtimesPermitidos) =>
+      updateSubTab(projectId, terminalId, tabId, (s) => ({
+        ...s,
+        runtimesPermitidos: [...new Set(runtimesPermitidos)],
+      })),
   }
 }
 

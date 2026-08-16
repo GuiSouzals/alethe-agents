@@ -37,6 +37,8 @@ type ModalKind =
   | 'updateAvailable'
   | 'whatsNew'
   | 'remoteControl'
+  // Lord ADR-0013 D2/D4 (etapa 3b): editor do conjunto de runtimes permitidos da aba.
+  | 'runtimesPermitidos'
   | null
 
 export type ActiveView = 'home' | 'workspace' | 'agentCanvas' | 'agentSandbox'

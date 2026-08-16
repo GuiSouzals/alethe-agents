@@ -858,6 +858,11 @@ export const en = {
   'term.newTerminalDescription': 'Choose a terminal and folder to start quickly.',
   'term.stepTerminal': '1. Terminal',
   'term.stepFolder': '2. Folder',
+  'term.stepScope': '3. Dispatch scope',
+  'term.stepScopeHint':
+    "If this terminal ever asks another AI to do something for it, it can only call the tools checked below. Example: leave only Codex checked and it can only ask Codex — never Claude or Cursor. By default, only itself is checked.",
+  'term.stepScopeEmptyWarning':
+    "Nothing checked: this terminal won't be able to call any other AI at all.",
   'term.browse': 'Browse',
   'term.recentFolders': 'Recent folders',
   'term.autoNameHint': 'Name will be generated automatically.',
@@ -1103,6 +1108,9 @@ export const en = {
   'orchestration.panel.awaiting': 'awaiting your confirmation',
   'orchestration.toast.title': '{provider} dispatched',
   'orchestration.toast.body': 'External order from {origin}.',
+  'orchestration.toast.blockedTitle': '{provider} blocked',
+  'orchestration.toast.blockedBody':
+    '{origin} tried to dispatch {provider}, but this tab does not allow it. Click "Allowed tools" on this tab and check {provider} to allow it.',
   // Lord: gate for external orders. Nothing reaches a paid CLI before an explicit click.
   'orchestration.pending.title': 'External order — nothing sent yet',
   'orchestration.pending.body':
@@ -1136,6 +1144,9 @@ export const en = {
   'ui.terminal.openInVscodeCwd': 'Open in VS Code · {cwd}',
   'ui.terminal.openLiveCwdInVscode': 'Open live cwd in VS Code',
   'ui.terminal.openInVscode': 'Open in VS Code',
+  'ui.terminal.runtimesPermitidos': 'Allowed tools',
+  'ui.terminal.runtimesPermitidosTitle': 'Can dispatch to: {list}',
+  'ui.terminal.runtimesPermitidosNone': 'none — this terminal cannot call any other AI',
   'ui.terminal.exitFocusModeEsc': 'Exit focus mode (Esc)',
   'ui.terminal.exitFocusMode': 'Exit focus mode',
   'ui.terminal.focusModeFullscreen': 'Focus mode (fullscreen)',

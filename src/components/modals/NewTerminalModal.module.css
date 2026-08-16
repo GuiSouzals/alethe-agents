@@ -169,6 +169,53 @@
   accent-color: var(--accent);
 }
 
+.scopeHint {
+  margin: 0 0 9px;
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.scopeChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.scopeChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  color: var(--fg-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    background 120ms,
+    border-color 120ms,
+    color 120ms;
+}
+
+.scopeChip:hover {
+  border-color: var(--border-strong);
+  color: var(--fg);
+}
+
+.scopeChipActive {
+  border-color: var(--accent);
+  background: var(--accent-faint);
+  color: var(--fg);
+}
+
+.scopeWarning {
+  margin: 9px 0 0;
+  color: var(--status-offline);
+  font-size: 11px;
+}
+
 .folderRow {
   min-height: 40px;
   display: flex;

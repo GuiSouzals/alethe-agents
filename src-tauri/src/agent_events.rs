@@ -72,6 +72,22 @@ pub struct SpawnReportV1 {
     reason: Option<String>,
 }
 
+// Lord D3/D4 (ADR-0013, etapa 3c): a recusa por conjunto de terminal precisa
+// aparecer na aba de origem — a resposta HTTP síncrona vai pro processo que
+// chamou /spawn (o harness), não pra UI. Este evento é o único jeito da
+// aba de origem descobrir que foi ela quem tentou algo fora do próprio
+// conjunto. `job_id` sempre existe mesmo em rejeição (SpawnResponseV1::rejected).
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SpawnRejectedEventV1 {
+    job_id: String,
+    request_id: String,
+    provider: String,
+    origin: String,
+    parent_terminal_id: String,
+    reason: String,
+}
+
 fn init_token() -> &'static str {
     LISTENER_TOKEN.get_or_init(|| nanoid::nanoid!(32))
 }
@@ -455,10 +471,23 @@ pub fn start_listener(app: AppHandle) {
                     let allowed = runtimes_permitidos_for_terminal(&app, parent_terminal_id);
                     if !provider_allowed(&payload.provider, allowed.as_deref()) {
                         let response = SpawnResponseV1::rejected(
-                            payload.request_id,
-                            payload.provider,
+                            payload.request_id.clone(),
+                            payload.provider.clone(),
                             "provider_nao_permitido",
                         );
+                        // Lord D4 (ADR-0013, etapa 3c): a aba de origem só descobre a
+                        // recusa por este evento — nunca falha silenciosa.
+                        let rejected_event = SpawnRejectedEventV1 {
+                            job_id: response.job_id.clone(),
+                            request_id: payload.request_id.clone(),
+                            provider: payload.provider.clone(),
+                            origin: payload.origin.clone(),
+                            parent_terminal_id: parent_terminal_id.to_string(),
+                            reason: "provider_nao_permitido".to_string(),
+                        };
+                        if let Err(error) = app.emit("lord-spawn-rejected", &rejected_event) {
+                            eprintln!("[agent_events] falha ao emitir lord-spawn-rejected: {error}");
+                        }
                         respond_spawn(request, response);
                         continue;
                     }
@@ -687,6 +716,25 @@ mod tests {
         ]}]}]}"#;
 
         assert_eq!(extract_runtimes_permitidos(projects_json, "terminal-1"), None);
+    }
+
+    // Lord D4 (ADR-0013, etapa 3c): o frontend consome isto direto como TS camelCase.
+    #[test]
+    fn spawn_rejected_event_serializes_in_camel_case_for_the_frontend() {
+        let event = SpawnRejectedEventV1 {
+            job_id: "spawn-job-1".to_string(),
+            request_id: "request-1".to_string(),
+            provider: "claude".to_string(),
+            origin: "lord".to_string(),
+            parent_terminal_id: "terminal-1".to_string(),
+            reason: "provider_nao_permitido".to_string(),
+        };
+
+        let json = serde_json::to_string(&event).unwrap();
+
+        assert!(json.contains(r#""jobId":"spawn-job-1""#));
+        assert!(json.contains(r#""parentTerminalId":"terminal-1""#));
+        assert!(json.contains(r#""reason":"provider_nao_permitido""#));
     }
 
     #[test]

@@ -39,11 +39,12 @@ import { TopbarSettingsModal } from './components/modals/TopbarSettingsModal'
 import { UpdateModal } from './components/modals/UpdateModal'
 import { WhatsNewModal } from './components/modals/WhatsNewModal'
 import { RemoteControlModal } from './components/modals/RemoteControlModal'
+import { RuntimesPermitidosModal } from './components/modals/RuntimesPermitidosModal'
 import { WelcomeModal } from './components/modals/WelcomeModal'
 import { useKeybindings } from './hooks/useKeybindings'
 import { useDiscordPresence } from './hooks/useDiscordPresence'
 import { useCliOpenRequests } from './hooks/useCliOpenRequests'
-import { useAgentSpawnListener } from './hooks/useAgentSpawnListener'
+import { useAgentSpawnListener, useSpawnRejectionListener } from './hooks/useAgentSpawnListener'
 import { useInternalSubagentProjection } from './hooks/useInternalSubagentProjection'
 import { useCloseConfirmation } from './hooks/useCloseConfirmation'
 import { useResourceSupervisor } from './hooks/useResourceSupervisor'
@@ -204,6 +205,8 @@ export default function App() {
   useCliOpenRequests(hydrated)
   // Lord B1: Keep the external dispatcher connected to the hydrated workspace.
   useAgentSpawnListener(hydrated)
+  // Lord D4 (ADR-0013, etapa 3c): recusa de provider nunca falha silenciosa.
+  useSpawnRejectionListener(hydrated)
   // Lord F3: Hooks internos alimentam apenas cards read-only correlacionados por IDs estáveis.
   useInternalSubagentProjection(hydrated)
 
@@ -480,6 +483,7 @@ export default function App() {
         <NewTerminalModal />
         <AddContentModal />
         <NewSubTabModal />
+        <RuntimesPermitidosModal />
         <PreferencesModal />
         <ProfilesModal />
         <SyncModal />

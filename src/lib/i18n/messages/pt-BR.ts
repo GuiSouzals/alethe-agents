@@ -866,6 +866,11 @@ export const ptBR: Record<MessageKey, string> = {
   'term.newTerminalDescription': 'Escolha um terminal e uma pasta para começar rapidamente.',
   'term.stepTerminal': '1. Terminal',
   'term.stepFolder': '2. Pasta',
+  'term.stepScope': '3. Alcance de despacho',
+  'term.stepScopeHint':
+    'Se este terminal um dia pedir para outra IA fazer algo por ele, só vai poder chamar as ferramentas marcadas abaixo. Exemplo: deixe só o Codex marcado e ele só vai conseguir pedir ao Codex — nunca ao Claude ou ao Cursor. Por padrão, só ele mesmo vem marcado.',
+  'term.stepScopeEmptyWarning':
+    'Nada marcado: este terminal não vai conseguir chamar nenhuma outra IA.',
   'term.browse': 'Procurar',
   'term.recentFolders': 'Pastas recentes',
   'term.autoNameHint': 'O nome será gerado automaticamente.',
@@ -1115,6 +1120,9 @@ export const ptBR: Record<MessageKey, string> = {
   'orchestration.panel.awaiting': 'aguardando sua confirmação',
   'orchestration.toast.title': '{provider} despachado',
   'orchestration.toast.body': 'Ordem externa vinda de {origin}.',
+  'orchestration.toast.blockedTitle': '{provider} bloqueado',
+  'orchestration.toast.blockedBody':
+    '{origin} tentou acionar {provider}, mas esta aba não permite. Clique em "Ferramentas permitidas" nesta aba e marque {provider} pra liberar.',
   // Lord: portão das ordens externas. Nada chega a um CLI pago antes de um clique explícito.
   'orchestration.pending.title': 'Ordem externa — nada foi enviado ainda',
   'orchestration.pending.body':
@@ -1148,6 +1156,9 @@ export const ptBR: Record<MessageKey, string> = {
   'ui.terminal.openInVscodeCwd': 'Abrir no VS Code · {cwd}',
   'ui.terminal.openLiveCwdInVscode': 'Abrir cwd vivo no VS Code',
   'ui.terminal.openInVscode': 'Abrir no VS Code',
+  'ui.terminal.runtimesPermitidos': 'Ferramentas permitidas',
+  'ui.terminal.runtimesPermitidosTitle': 'Pode acionar: {list}',
+  'ui.terminal.runtimesPermitidosNone': 'nenhuma — este terminal não consegue chamar outra IA',
   'ui.terminal.exitFocusModeEsc': 'Sair do Focus mode (Esc)',
   'ui.terminal.exitFocusMode': 'Sair do Focus mode',
   'ui.terminal.focusModeFullscreen': 'Focus mode (fullscreen)',

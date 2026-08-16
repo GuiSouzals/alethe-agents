@@ -40,6 +40,10 @@ export function NewTerminalModal() {
   const [unrestricted, setUnrestricted] = useState<Record<AgentType, boolean>>(() =>
     Object.fromEntries(ALL_AGENT_TYPES.map((agent) => [agent, false])) as Record<AgentType, boolean>,
   )
+  // Lord ADR-0013 D2: default restritivo — só o próprio tipo vem marcado.
+  // Reseta quando o tipo do terminal muda (trocar de Claude pra Codex, por
+  // exemplo, não deveria carregar uma seleção pensada pro tipo anterior).
+  const [runtimesPermitidos, setRuntimesPermitidos] = useState<AgentType[]>([type])
 
   const visibleAgents = AGENTS.filter((a) => enabled[a.type])
   const defaultType =
@@ -72,6 +76,7 @@ export function NewTerminalModal() {
     if (!open) return
     setCwd(inheritedCwd)
     setType(defaultType)
+    setRuntimesPermitidos([defaultType])
     // Lord F1: inclui cursor via ALL_AGENT_TYPES.
     setUnrestricted(
       Object.fromEntries(
@@ -80,10 +85,25 @@ export function NewTerminalModal() {
     )
   }, [open, context?.projectId, inheritedCwd, defaultType, alwaysStartUnrestricted])
 
+  // Lord ADR-0013 D2: trocar o tipo do terminal reseta o conjunto pro novo
+  // próprio tipo — evita carregar uma seleção pensada pro tipo anterior sem
+  // o usuário notar.
+  const selectType = (next: AgentType) => {
+    setType(next)
+    setRuntimesPermitidos([next])
+  }
+
+  const toggleRuntimePermitido = (agent: AgentType) => {
+    setRuntimesPermitidos((current) =>
+      current.includes(agent) ? current.filter((item) => item !== agent) : [...current, agent],
+    )
+  }
+
   const reset = () => {
     setType(defaultType)
     setRuntimeProfile('lean')
     setCwd('')
+    setRuntimesPermitidos([defaultType])
     setUnrestricted({
       shell: false,
       claude: false,
@@ -105,7 +125,7 @@ export function NewTerminalModal() {
     await createAgentTerminal(context.projectId, {
       name: finalName,
       cwd: finalCwd,
-      firstTab: { type, cwd: finalCwd, extraArgs, runtimeProfile },
+      firstTab: { type, cwd: finalCwd, extraArgs, runtimeProfile, runtimesPermitidos },
     })
     reset()
     closeModal()
@@ -153,7 +173,7 @@ export function NewTerminalModal() {
                 key={a.type}
                 type="button"
                 className={`${styles.agentCard} ${active ? styles.agentCardActive : ''}`}
-                onClick={() => setType(a.type)}
+                onClick={() => selectType(a.type)}
                 aria-pressed={active}
               >
                 <span className={styles.agentIcon}>
@@ -235,6 +255,32 @@ export function NewTerminalModal() {
               })}
             </div>
           </div>
+        ) : null}
+      </section>
+
+      <section className={styles.section}>
+        <h3 className={styles.stepTitle}>{t('term.stepScope')}</h3>
+        <p className={styles.scopeHint}>{t('term.stepScopeHint')}</p>
+        <div className={styles.scopeChips}>
+          {visibleAgents.map((a) => {
+            const checked = runtimesPermitidos.includes(a.type)
+            return (
+              <button
+                key={a.type}
+                type="button"
+                className={`${styles.scopeChip} ${checked ? styles.scopeChipActive : ''}`}
+                onClick={() => toggleRuntimePermitido(a.type)}
+                aria-pressed={checked}
+              >
+                <AgentIcon type={a.type} size={14} theme={terminalTheme} />
+                <span>{a.label}</span>
+                {checked ? <CircleCheck size={13} /> : null}
+              </button>
+            )
+          })}
+        </div>
+        {runtimesPermitidos.length === 0 ? (
+          <p className={styles.scopeWarning}>{t('term.stepScopeEmptyWarning')}</p>
         ) : null}
       </section>
 

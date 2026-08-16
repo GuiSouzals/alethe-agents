@@ -203,6 +203,8 @@ export type ProjectsState = ProjectsFile & {
         orchestrationParentTerminalId?: string
         orchestrationInternalAgentId?: string
         automatedSpawn?: boolean
+        /** Lord ADR-0013 D2: default restritivo — omitido vira só o próprio tipo. */
+        runtimesPermitidos?: AgentType[]
       }
       worktreeAgentId?: string
       gsdSyncViewer?: boolean
@@ -232,6 +234,8 @@ export type ProjectsState = ProjectsFile & {
         orchestrationParentTerminalId?: string
         orchestrationInternalAgentId?: string
         automatedSpawn?: boolean
+        /** Lord ADR-0013 D2: default restritivo — omitido vira só o próprio tipo. */
+        runtimesPermitidos?: AgentType[]
       }
     },
   ) => Promise<Terminal>
@@ -335,6 +339,13 @@ export type ProjectsState = ProjectsFile & {
     terminalId: string,
     tabId: string,
     initialInput: string | undefined,
+  ) => void
+  /** Lord ADR-0013 D2: só o usuário chama isto, pela interface. */
+  setSubTabRuntimesPermitidos: (
+    projectId: string,
+    terminalId: string,
+    tabId: string,
+    runtimesPermitidos: AgentType[],
   ) => void
 
   // preferences / cli
