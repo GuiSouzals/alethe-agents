@@ -30,8 +30,10 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      # Mesmo contorno do job de build — ver o comentário completo lá (reinvestigado em
+      # 2026-08-16: não é divergência de versão de npm, pinar não resolve).
       - name: Install dependencies
-        run: npm install --no-audit --no-fund   # mesmo contorno do job de build
+        run: npm install --no-audit --no-fund
 
       - name: Typecheck
         run: npx tsc --noEmit
@@ -72,8 +74,41 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      # CI: contorno no `npm ci`, mantido após reinvestigação em 2026-08-16 — pinar a
+      # versão do npm no workflow NÃO resolve isto, e há evidência concreta do porquê.
+      #
+      # Histórico do problema: `npm ci` falhava com EUSAGE em 3 execuções seguidas de
+      # workflow_dispatch em 2026-08-14 (runs 31809676624, 31811830981, 31811631754):
+      #   "Missing: @testing-library/dom@10.4.1, @types/aria-query@5.0.4,
+      #    dom-accessibility-api@0.5.16, lz-string@1.5.0, pretty-format@27.5.1,
+      #    ansi-regex@5.0.1, ansi-styles@5.2.0, react-is@17.0.2 from lock file"
+      # Trocar por `npm install` corrigiu na hora (commit bc3c440), com o diagnóstico
+      # registrado então: "divergência de dedupe entre o lock local e o npm do runner".
+      #
+      # Reinvestigação (2026-08-16, ver `gh run view 31811631754 --log`): o log do
+      # próprio run mostra `node: v20.20.2` / `npm: 10.8.2` no runner — a MESMA versão
+      # de npm da máquina que gera o lock aqui (10.8.2). O diagnóstico original estava
+      # errado: não existe divergência de versão de npm para pinar. `npm i -g npm@X`
+      # antes do `npm ci` não mudaria nada, porque X já é a versão em uso.
+      # Tentativas de reproduzir a falha localmente, TODAS com sucesso (ou seja,
+      # nenhuma reproduziu o erro do runner):
+      #   - `npm ci` com npm 10.8.2 (local, igual ao runner) contra o lock atual;
+      #   - `npm ci` via `npx npm@10.7.0` / `@10.2.4` / `@9.8.1` (outras versões que o
+      #     Node 20.x já empacotou ao longo do ciclo de vida) contra o lock atual;
+      #   - `npm ci` com cache do npm vazio (`--cache <dir vazio>`), imitando o
+      #     "npm cache is not found" que aparece no log do runner;
+      #   - `npm ci` contra o LOCK ANTIGO de antes da correção (`git show bc3c440^:
+      #     package-lock.json`, o mesmo lock que de fato falhou no runner).
+      # Mesma versão de npm, mesmo SO (windows-latest = Windows local), mesmo lock,
+      # cache frio ou quente — só o runner falha. A causa real segue sem explicação;
+      # não é algo que fixar a versão do npm resolva, porque a versão já bate.
+      #
+      # Contorno mantido de propósito, não por falta de tentativa: um diagnóstico de
+      # verdade exigiria um log `--loglevel silly` de uma execução que falhe no
+      # próprio runner — e isso só é possível com `npm ci` religado, o que quebraria o
+      # build de novo até alguém investigar ao vivo.
       - name: Install dependencies
-        run: npm install --no-audit --no-fund   # CONTORNO, nao correcao: npm ci falha porque o lock e o npm do runner divergem no dedupe de transitivas de @testing-library (lz-string, pretty-format). Voltar para npm ci quando o lock for regenerado com o mesmo npm do runner.
+        run: npm install --no-audit --no-fund
 
       - name: Build Tauri installers
         run: npm run tauri build
