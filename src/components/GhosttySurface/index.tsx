@@ -6,9 +6,15 @@ import {
   ghosttySpawn,
   ghosttySurfaceExited,
   ghosttySyncFrame,
+  ghosttyWriteText,
   type WebRect,
 } from '../../lib/tauri'
 import { webRectsEqual } from '../../lib/webRect'
+import type { InitialInputGate } from '../XTermView/useXtermSession'
+
+/** Espelha `INITIAL_INPUT_GATE_POLL_MS` de `useXtermSession.ts` — mesma
+ *  cadência de checagem do portão, backends diferentes. */
+const INITIAL_INPUT_GATE_POLL_MS = 250
 
 /** Intervalo do polling de saída do processo (ver useEffect abaixo). Baixo o
  * bastante pra fechar o pane sem demora perceptível, alto o bastante pra não
@@ -32,6 +38,26 @@ export type GhosttySurfaceProps = {
   onSpawned?: (id: string) => void
   /** Chamado quando o processo do terminal (shell/agente) sai — o pane fecha. */
   onExit?: () => void
+  /**
+   * Lord: prompt inicial — mesmo campo que `XTermView.initialInput`
+   * (`SubTab.initialInput`, `TerminalPane`). Digitado na surface uma única vez
+   * após o spawn, atrás do mesmo portão (`initialInputGate`) do backend xterm.
+   */
+  initialInput?: string
+  /**
+   * Lord: decisão do portão de confirmação (`lib/spawnConfirmation.ts`) — ver
+   * `XTermView`. Diferença deliberada em relação ao xterm: lá, `hold` escreve
+   * um banner DENTRO do terminal (`terminal.write`, que é só display local,
+   * nunca chega no PTY). Aqui não há equivalente — `ghosttyWriteText` manda
+   * teclas de verdade pro shell (`alethe_ghostty_surface_send_text`), então
+   * "escrever um aviso" apareceria como entrada real digitada no prompt do
+   * usuário. O aviso de "segurando" já existe de forma agnóstica de backend no
+   * banner HTML (`TerminalPane.spawnGate`, renderizado por cima da área do
+   * terminal nos dois backends) — aqui só a espera silenciosa é necessária.
+   */
+  initialInputGate?: InitialInputGate
+  onInitialInputSent?: () => void
+  onInitialInputDiscarded?: () => void
 }
 
 /**
@@ -57,23 +83,39 @@ export function GhosttySurface({
   active = true,
   onSpawned,
   onExit,
+  initialInput,
+  initialInputGate,
+  onInitialInputSent,
+  onInitialInputDiscarded,
 }: GhosttySurfaceProps) {
   const placeholderRef = useRef<HTMLDivElement | null>(null)
   const lastRectRef = useRef<WebRect | null>(null)
   const rafRef = useRef<number | null>(null)
   const spawnedRef = useRef(false)
 
-  // cwd/command capturados na 1ª montagem (a surface spawna o processo uma vez).
-  const spawnArgsRef = useRef({ cwd, command })
+  // cwd/command/initialInput capturados na 1ª montagem (a surface spawna o processo uma vez).
+  const spawnArgsRef = useRef({ cwd, command, initialInput })
+
+  // Lord: gate lido dentro do laço de espera (useEffect abaixo mantém o ref
+  // atualizado) sem recriar o efeito de ciclo de vida — mesmo padrão de
+  // `XTermView`/`useXtermSession.initialInputGateRef`.
+  const initialInputGateRef = useRef(initialInputGate)
+  useEffect(() => {
+    initialInputGateRef.current = initialInputGate
+  }, [initialInputGate])
 
   // onSpawned é recriado a cada render do pai; guardamos num ref para o efeito
   // de ciclo de vida NÃO depender dele — senão a cada re-render do TerminalPane
   // a surface seria morta e recriada (e o terminal piscaria/reiniciaria).
   const onSpawnedRef = useRef(onSpawned)
   const onExitRef = useRef(onExit)
+  const onInitialInputSentRef = useRef(onInitialInputSent)
+  const onInitialInputDiscardedRef = useRef(onInitialInputDiscarded)
   useEffect(() => {
     onSpawnedRef.current = onSpawned
     onExitRef.current = onExit
+    onInitialInputSentRef.current = onInitialInputSent
+    onInitialInputDiscardedRef.current = onInitialInputDiscarded
   })
 
   // Valor de `active` lido dentro dos efeitos (que não dependem dele p/ não
@@ -130,9 +172,53 @@ export function GhosttySurface({
     }
     pushFrameNowRef.current = pushFrameNow
 
+    // Lord: digita o `initialInput` uma única vez, atrás do mesmo portão de
+    // confirmação do backend xterm (`useXtermSession.sendInitialInput`).
+    //
+    // NÃO EXERCITADO EM RUNTIME — sem macOS disponível para testar. Duas
+    // diferenças deliberadas em relação ao xterm, ambas por limitação real do
+    // backend nativo, não por descuido:
+    //   1. sem banner de "segurando" digitado no terminal (ver doc da prop
+    //      `initialInputGate` acima) — o aviso fica só no banner HTML do
+    //      `TerminalPane`, que já cobre os dois backends;
+    //   2. sem espera por "silêncio" do PTY (`quietFor`, useXtermSession) — o
+    //      Ghostty nativo não expõe um stream de dados pro frontend
+    //      (`listenPtyData` não existe pra surface nativa; só há
+    //      `ghostty_debug_send_read`, síncrono e caro, feito para smoke test,
+    //      não para produção). Uma espera fixa substitui a detecção de
+    //      silêncio — mais simples, mas sem o mesmo cuidado de "esperar o
+    //      agente terminar de imprimir o boot antes de digitar por cima".
+    const sendInitialInput = async (surfaceIdReady: string, prompt: string) => {
+      for (;;) {
+        if (disposed) return
+        const gate = initialInputGateRef.current ?? 'auto'
+        if (gate === 'discard') {
+          onInitialInputDiscardedRef.current?.()
+          return
+        }
+        if (gate !== 'hold') break
+        await new Promise((resolve) => window.setTimeout(resolve, INITIAL_INPUT_GATE_POLL_MS))
+      }
+      if (disposed) return
+      // Janela fixa pro shell/agente terminar o boot antes de digitarmos por cima
+      // — mesmo piso de `earliestSendAt` do xterm (1500ms), sem o teto/deadline
+      // dinâmico de lá porque não há sinal de atividade do PTY pra encurtar a
+      // espera quando o processo já está pronto antes disso.
+      await new Promise((resolve) => window.setTimeout(resolve, 1_500))
+      if (disposed) return
+      try {
+        await ghosttyWriteText(surfaceIdReady, prompt)
+        await new Promise((resolve) => window.setTimeout(resolve, 150))
+        await ghosttyWriteText(surfaceIdReady, '\r')
+        onInitialInputSentRef.current?.()
+      } catch (error) {
+        console.warn('[ghostty] não foi possível enviar o prompt inicial:', error)
+      }
+    }
+
     const start = async () => {
       try {
-        const { cwd, command } = spawnArgsRef.current
+        const { cwd, command, initialInput } = spawnArgsRef.current
         const res = await ghosttySpawn({ id: surfaceId, cwd, command })
         if (disposed) return
         spawnedRef.current = true
@@ -141,6 +227,8 @@ export function GhosttySurface({
         // placeholder ainda não tenha assentado no exato instante do spawn.
         pushFrameNow()
         window.setTimeout(() => pushFrameNow(), 50)
+        const prompt = initialInput?.trim()
+        if (prompt) void sendInitialInput(res.id, prompt)
       } catch (err) {
         console.error('ghostty_spawn falhou', err)
       }

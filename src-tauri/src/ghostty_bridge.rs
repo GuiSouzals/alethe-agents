@@ -482,6 +482,38 @@ mod imp {
         Ok(String::from_utf8_lossy(&buf).to_string())
     }
 
+    /// Lord: digita `text` na surface como entrada de teclado real — equivalente
+    /// nativo do `write_pty` do backend xterm/ConPTY. Usado pelo `initialInput`
+    /// (prompt inicial + portão de confirmação de provider pago,
+    /// `lib/spawnConfirmation.ts` no frontend). Ao contrário de
+    /// `debug_send_read`, não dorme nem lê o grid de volta: a renderização é
+    /// responsabilidade do próprio display link do Ghostty, não deste comando.
+    ///
+    /// NÃO EXERCITADO EM RUNTIME — implementado sem macOS disponível para
+    /// testar nesta máquina. Segue fielmente o mesmo padrão de
+    /// `debug_send_read` (que É testado pelo smoke de `ALETHE_GHOSTTY_PROBE`),
+    /// mas essa função em si nunca rodou.
+    #[cfg(ghostty_linked)]
+    pub fn write_text(state: &State<'_, GhosttyState>, id: String, text: String) -> Result<(), String> {
+        use crate::ghostty_ffi::*;
+        use std::ffi::CString;
+        let _mtm = MainThreadMarker::new()
+            .ok_or_else(|| "ghostty_write_text precisa rodar na main thread".to_string())?;
+        let surface = {
+            let views = state.views.lock().map_err(|_| "lock poisoned".to_string())?;
+            let e = views.get(&id).ok_or_else(|| format!("surface {id} não encontrada"))?;
+            e.surface
+        };
+        if surface.is_null() {
+            return Err("surface nula".into());
+        }
+        if !text.is_empty() {
+            let c = CString::new(text).map_err(|_| "texto inválido".to_string())?;
+            unsafe { alethe_ghostty_surface_send_text(surface, c.as_ptr(), c.as_bytes().len()) };
+        }
+        Ok(())
+    }
+
     pub fn set_focus(
         state: &State<'_, GhosttyState>,
         id: String,
@@ -1103,6 +1135,29 @@ pub fn ghostty_kill(
 #[tauri::command]
 pub fn ghostty_kill_all(state: tauri::State<'_, GhosttyState>) -> Result<(), String> {
     imp::kill_all(&state)
+}
+
+/// Lord: digita `text` na surface nativa (initialInput/gate de confirmação —
+/// ver `imp::write_text`). Erro fora do macOS/linked, igual aos demais
+/// comandos deste arquivo — o frontend só chama isto quando
+/// `shouldUseNativeBackend()` já filtrou a plataforma.
+///
+/// NÃO EXERCITADO EM RUNTIME nesta tarefa: sem macOS disponível para testar.
+#[tauri::command]
+pub fn ghostty_write_text(
+    state: tauri::State<'_, GhosttyState>,
+    id: String,
+    text: String,
+) -> Result<(), String> {
+    #[cfg(all(target_os = "macos", ghostty_linked))]
+    {
+        imp::write_text(&state, id, text)
+    }
+    #[cfg(not(all(target_os = "macos", ghostty_linked)))]
+    {
+        let _ = (&state, &id, &text);
+        Err("ghostty_write_text indisponível (precisa macOS + libghostty)".into())
+    }
 }
 
 /// DEBUG/automação: envia texto pra surface e lê o grid de volta. Prova o fluxo

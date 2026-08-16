@@ -284,6 +284,17 @@ pub fn run() {
             ghostty_bridge::ghostty_spawn,
             ghostty_bridge::ghostty_sync_frame,
             ghostty_bridge::ghostty_set_hidden,
+            // Lord: as duas linhas abaixo faltavam no invoke_handler — GhosttySurface
+            // já chamava ghosttySetFocus/ghosttySurfaceExited do frontend (foco de
+            // teclado e polling de saída do processo), mas os comandos nunca tinham
+            // sido registrados aqui, então todo invoke() falhava com "command not
+            // found" no macOS. Achado ao implementar ghostty_write_text (paridade de
+            // initialInput no backend nativo); corrigido junto por estar no mesmo
+            // ponto e ser o mesmo tipo de lacuna. NÃO EXERCITADO EM RUNTIME (sem
+            // macOS nesta máquina) — só o CI/uma sessão real em Mac confirma.
+            ghostty_bridge::ghostty_set_focus,
+            ghostty_bridge::ghostty_surface_exited,
+            ghostty_bridge::ghostty_write_text,
             ghostty_bridge::ghostty_kill,
             ghostty_bridge::ghostty_kill_all,
             ghostty_bridge::ghostty_debug_send_read,

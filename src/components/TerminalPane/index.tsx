@@ -564,6 +564,14 @@ export const TerminalPane = memo(function TerminalPane({
                     surfaceId={activeTab.id}
                     cwd={activeTab.cwd?.trim() || terminal.cwd?.trim() || undefined}
                     command={buildGhosttyCommand(activeTab.type, activeTab.extraArgs)}
+                    initialInput={activeTab.initialInput}
+                    initialInputGate={initialInputGate}
+                    onInitialInputSent={() =>
+                      setSubTabInitialInput(projectId, terminal.id, activeTab.id, undefined)
+                    }
+                    onInitialInputDiscarded={() =>
+                      setSubTabInitialInput(projectId, terminal.id, activeTab.id, undefined)
+                    }
                     onSpawned={(id) => {
                       if (activeTab.ptyId !== id) {
                         setSubTabPtyId(projectId, terminal.id, activeTab.id, id)

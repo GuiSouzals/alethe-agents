@@ -140,6 +140,17 @@ export async function ghosttyKill(id: string): Promise<void> {
   await invoke('ghostty_kill', { id })
 }
 
+/**
+ * Lord: digita `text` na surface nativa como se fosse teclado — equivalente do
+ * `writePty` do backend xterm/ConPTY, usado pelo `initialInput`
+ * (`GhosttySurface`, `TerminalPane`). NÃO EXERCITADO EM RUNTIME: implementado
+ * sem macOS disponível para testar (ver comentário no comando Rust,
+ * `ghostty_bridge.rs`).
+ */
+export async function ghosttyWriteText(id: string, text: string): Promise<void> {
+  await invoke('ghostty_write_text', { id, text })
+}
+
 /** Mata todas as surfaces nativas vivas — limpeza de órfãs no boot/reload. */
 export async function ghosttyKillAll(): Promise<void> {
   await invoke('ghostty_kill_all')
