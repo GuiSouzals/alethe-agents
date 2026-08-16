@@ -70,3 +70,31 @@ describe('requiresSpawnConfirmation', () => {
     expect(requiresSpawnConfirmation(null, false)).toBe(false)
   })
 })
+
+// Lord: segunda porta de entrada da condição (a) — automação interna (ex.: schedulerStore)
+// sem `orchestrationRequestId`, via `automatedSpawn`.
+describe('requiresSpawnConfirmation — automatedSpawn (disparo interno sem clique humano)', () => {
+  const automatedPaidTab = (
+    overrides: Partial<SpawnConfirmationTab> = {},
+  ): SpawnConfirmationTab => ({
+    type: 'claude',
+    automatedSpawn: true,
+    ...overrides,
+  })
+
+  it('exige confirmação para automação interna sem orchestrationRequestId', () => {
+    expect(requiresSpawnConfirmation(automatedPaidTab(), false)).toBe(true)
+  })
+
+  it('não exige confirmação quando automatedSpawn é false/ausente e não há requestId', () => {
+    expect(requiresSpawnConfirmation(automatedPaidTab({ automatedSpawn: false }), false)).toBe(
+      false,
+    )
+    expect(requiresSpawnConfirmation({ type: 'claude' }, false)).toBe(false)
+  })
+
+  it('ainda respeita provider pago e externalSpawnAutoRun para o caminho automatedSpawn', () => {
+    expect(requiresSpawnConfirmation(automatedPaidTab({ type: 'shell' }), false)).toBe(false)
+    expect(requiresSpawnConfirmation(automatedPaidTab(), true)).toBe(false)
+  })
+})

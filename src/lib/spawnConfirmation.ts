@@ -23,18 +23,26 @@ export function isPaidSpawnProvider(provider: string): provider is PaidSpawnProv
 }
 
 /**
- * Recorte mínimo do SubTab que a decisão consome. `orchestrationRequestId` é o
- * discriminador de origem que já existe: só o caminho externo
- * (`useAgentSpawnListener` → `terminalFactory`) preenche esse campo; criação
- * local deixa `undefined`.
+ * Recorte mínimo do SubTab que a decisão consome. Dois discriminadores de
+ * origem, independentes: `orchestrationRequestId` — só o caminho externo
+ * (`useAgentSpawnListener` → `terminalFactory`, ordem HTTP `/spawn`, D1)
+ * preenche esse campo — e `automatedSpawn` — disparo automático interno sem
+ * clique humano no instante (ex.: `schedulerStore` reagindo a
+ * `AgentSpawnRequested` do backend). Criação local/ação direta do usuário
+ * deixa os dois `undefined`/`false`.
  */
-export type SpawnConfirmationTab = Pick<SubTab, 'type' | 'orchestrationRequestId'>
+export type SpawnConfirmationTab = Pick<
+  SubTab,
+  'type' | 'orchestrationRequestId' | 'automatedSpawn'
+>
 
 /**
  * Decisão pura: este SubTab exige confirmação humana antes do primeiro envio?
  *
  * Exige quando as três condições valem ao mesmo tempo:
- * 1. o prompt veio de fora (`orchestrationRequestId` presente e não vazio);
+ * 1. o prompt não nasceu de um clique direto do usuário — veio de ordem
+ *    externa (`orchestrationRequestId` presente e não vazio) OU de automação
+ *    interna (`automatedSpawn === true`);
  * 2. o provider é pago (`PAID_SPAWN_PROVIDERS`);
  * 3. `externalSpawnAutoRun` está desligado.
  *
@@ -46,8 +54,9 @@ export function requiresSpawnConfirmation(
   externalSpawnAutoRun: boolean,
 ): boolean {
   if (!tab) return false
-  const requestId = tab.orchestrationRequestId?.trim()
-  if (!requestId) return false
+  const externalRequestId = tab.orchestrationRequestId?.trim()
+  const dispatchedByOrder = Boolean(externalRequestId) || tab.automatedSpawn === true
+  if (!dispatchedByOrder) return false
   if (!isPaidSpawnProvider(tab.type)) return false
   return externalSpawnAutoRun !== true
 }

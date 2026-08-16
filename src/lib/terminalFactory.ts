@@ -71,6 +71,7 @@ export function makeDefaultTerminal(args: {
     orchestrationJobId?: string
     orchestrationParentTerminalId?: string
     orchestrationInternalAgentId?: string
+    automatedSpawn?: boolean
   }
   worktreeAgentId?: string
   gsdSyncViewer?: boolean
@@ -105,6 +106,7 @@ export function makeDefaultTerminal(args: {
         orchestrationJobId: args.firstTab.orchestrationJobId,
         orchestrationParentTerminalId: args.firstTab.orchestrationParentTerminalId,
         orchestrationInternalAgentId: args.firstTab.orchestrationInternalAgentId,
+        automatedSpawn: args.firstTab.automatedSpawn,
       },
     ],
   }

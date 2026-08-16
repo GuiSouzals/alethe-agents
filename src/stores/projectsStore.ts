@@ -202,6 +202,7 @@ export type ProjectsState = ProjectsFile & {
         orchestrationJobId?: string
         orchestrationParentTerminalId?: string
         orchestrationInternalAgentId?: string
+        automatedSpawn?: boolean
       }
       worktreeAgentId?: string
       gsdSyncViewer?: boolean
@@ -230,6 +231,7 @@ export type ProjectsState = ProjectsFile & {
         orchestrationJobId?: string
         orchestrationParentTerminalId?: string
         orchestrationInternalAgentId?: string
+        automatedSpawn?: boolean
       }
     },
   ) => Promise<Terminal>

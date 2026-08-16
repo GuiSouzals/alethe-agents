@@ -138,6 +138,14 @@ export type SubTab = {
   orchestrationJobId?: string
   orchestrationParentTerminalId?: string
   orchestrationInternalAgentId?: string
+  /**
+   * Lord: true quando o `initialInput` foi disparado por automação interna sem
+   * clique humano no instante (ex.: `schedulerStore`), e não por ordem HTTP
+   * externa (`orchestrationRequestId`, D1) nem por ação direta do usuário.
+   * Único consumidor: `requiresSpawnConfirmation` (`lib/spawnConfirmation.ts`)
+   * — mesmo portão de confirmação do provider pago, segunda porta de entrada.
+   */
+  automatedSpawn?: boolean
 }
 
 export type AgentRuntimeProfile = 'full' | 'lean' | 'diagnostic'

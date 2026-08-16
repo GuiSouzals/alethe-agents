@@ -160,7 +160,21 @@ function adminLockReasonFrom(message: string): string | null {
   return match ? match[1] : null
 }
 
-/** Fecha o terminal antigo (se houver) e abre um novo apontando pro mesmo cwd — não existe "resumir" um PTY morto, só recriar (ver decisão de design do plano). */
+/**
+ * Fecha o terminal antigo (se houver) e abre um novo apontando pro mesmo cwd — não existe
+ * "resumir" um PTY morto, só recriar (ver decisão de design do plano).
+ *
+ * Lord: o prompt de retry vai em `extraArgs` (argumento de CLI), não `initialInput`, e por
+ * isso NÃO passa pelo portão de confirmação de provider pago (`lib/spawnConfirmation.ts`).
+ * Decisão deliberada, não descuido: quem colocou este merge em andamento foi um clique
+ * direto do usuário (botão "Merge"/"Integrar" em `EditProjectModal`/`SidebarMergePanel`, ou
+ * "Retry Manual" chamando `retry()`) — o dinheiro gasto pelo agente de conflito já foi
+ * consentido no instante desse clique. O reabrir automático daqui (disparado por
+ * `signal()` via `watchFile`/`pty-exit` em `beginResolvingWatch`, sem novo clique) é
+ * continuação da MESMA tentativa já aprovada, não uma nova ordem autônoma — não é "ordem
+ * externa" nem "automação" no sentido do portão (que existe pra decisão que ninguém viu
+ * acontecer). Ver também o comentário equivalente em `start()`, mais abaixo.
+ */
 function reopenAgentTerminal(
   set: (partial: Partial<MergeState>) => void,
   get: () => MergeState,
@@ -311,6 +325,15 @@ export const useMergeStore = create<MergeState>((set, get) => ({
         return
       }
       // Conflito: spawna o agente efêmero num terminal visível do projeto.
+      //
+      // Lord: prompt em `extraArgs`, de propósito fora do portão de confirmação
+      // (`lib/spawnConfirmation.ts`). `start()` só chega aqui a partir de um clique
+      // direto do usuário — "Merge" (`EditProjectModal`) ou "Integrar"
+      // (`SidebarMergePanel` → `integrateWorktree`) — nunca de ordem HTTP externa (D1)
+      // nem de tick de automação (scheduler). O usuário pediu a integração agora; o
+      // agente de conflito é consequência imediata e visível desse pedido, não uma
+      // decisão que alguém de fora tomou sem o humano saber. Por isso não é forçado o
+      // mesmo gate que `useAgentSpawnListener`/`schedulerStore` usam.
       const provider = project.conflictAgentProvider ?? 'claude'
       const model = project.conflictAgentModel
       const terminal = useProjectsStore.getState().createTerminal(project.id, {

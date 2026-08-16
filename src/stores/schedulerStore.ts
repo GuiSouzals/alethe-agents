@@ -10,6 +10,7 @@ import {
 import { useProjectsStore } from './projectsStore'
 import { useUiStore } from './uiStore'
 import { translate, getLocale } from '../lib/i18n'
+import type { AgentType } from '../lib/types'
 
 type SchedulerState = {
   tasks: SchedulerTask[]
@@ -31,6 +32,31 @@ function taskPrompt(taskTitle: string): string {
     '.planning/goal.md do repositório original para o contexto completo, ' +
     'implemente SOMENTE essa tarefa neste diretório isolado e avise quando terminar.'
   )
+}
+
+/**
+ * Lord: firstTab do agente de task do scheduler. Exportada pura (sem `cwd`,
+ * que só o chamador conhece) para poder testar sem montar o zustand inteiro.
+ *
+ * Duas decisões deliberadas, ambas ligadas ao portão de confirmação
+ * (`lib/spawnConfirmation.ts`):
+ * 1. o prompt vai em `initialInput`, não `extraArgs` — só `initialInput` passa
+ *    pelo `initialInputGate` do XTermView; em `extraArgs` ele vira argumento
+ *    de linha de comando entregue ao processo antes de qualquer confirmação
+ *    possível, e o gate nunca chega a interceptar.
+ * 2. `automatedSpawn: true` — este terminal nasce de `AgentSpawnRequested`,
+ *    publicado pelo scheduler do backend (`scheduler.rs`) num tick, sem
+ *    clique humano no instante. É "automação" na mesma categoria que a ordem
+ *    HTTP externa do D1 (`orchestrationRequestId`), então precisa do mesmo
+ *    portão antes do primeiro `\r` quando o provider é pago.
+ */
+export function buildSchedulerTaskFirstTab(provider: AgentType, taskTitle: string) {
+  return {
+    type: provider,
+    initialInput: taskPrompt(taskTitle),
+    orchestrationOrigin: 'scheduler',
+    automatedSpawn: true,
+  }
 }
 
 export const useSchedulerStore = create<SchedulerState>((set, get) => ({
@@ -113,7 +139,7 @@ export const useSchedulerStore = create<SchedulerState>((set, get) => ({
         const terminal = projects.createTerminal(projectId, {
           name: taskTitle.slice(0, 40),
           cwd: worktreePath,
-          firstTab: { type: provider, cwd: worktreePath, extraArgs: [taskPrompt(taskTitle)] },
+          firstTab: { ...buildSchedulerTaskFirstTab(provider, taskTitle), cwd: worktreePath },
         })
         set((state) => ({
           taskTerminals: { ...state.taskTerminals, [realTaskId]: terminal.id },
