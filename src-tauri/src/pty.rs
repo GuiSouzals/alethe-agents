@@ -397,6 +397,18 @@ pub async fn spawn_pty(
                 command.env(key, value);
             }
         }
+        // Lord: marcador de proveniência do chassi. Todo PTY nascido aqui carrega
+        // estas duas variáveis, e o processo filho as herda — é assim que o
+        // harness (lord-brain) distingue "sessão nascida do Lord" de sessão
+        // aberta num terminal qualquer. Vem DEPOIS do `extra_env` de propósito:
+        // nenhum chamador do frontend sobrescreve a proveniência.
+        //
+        // NÃO é fronteira de segurança e não a chamamos de uma: variável de
+        // ambiente é falsificável por quem já tem o terminal. É acoplamento de
+        // uso — o harness recusa operar fora do Lord, e quem contornar tem de
+        // declarar isso (ver `scripts/hooks/exige-sessao-lord.js` no lord-brain).
+        command.env("LORD_CHASSI", "1");
+        command.env("LORD_TERMINAL_ID", &id);
         let resolve_ms = resolve_started.elapsed().as_millis();
         let builder_ms = spawn_started.elapsed().as_millis();
         let effective_path_preview = command
