@@ -61,6 +61,11 @@ export function buildAgentLaunch(
   // AMBIENTE no próprio projeto (`.codex/config.toml` / `opencode.json`), escrito
   // ANTES do spawn (XTermView), não por flag aqui. Arquitetura correta dos 3 CLIs.
   mcpConfigPaths?: readonly string[],
+  // Lord ADR-0013 D5 (etapa 5): path do settings.json de hooks de subagente
+  // (agent_events.rs::agent_hooks_settings_path), resolvido pelo chamador
+  // ANTES desta chamada (I/O assíncrono não cabe nesta função pura). `undefined`
+  // = não resolveu (best-effort) ou não é Claude — nenhum `--settings` extra.
+  hooksSettingsPath?: string,
 ): AgentLaunch {
   if (agent === 'shell') {
     return { args: [...baseArgs], sessionId: undefined, createdSession: false }
@@ -69,16 +74,23 @@ export function buildAgentLaunch(
   if (agent === 'claude') {
     const clean = stripClaudeSessionArgs([...baseArgs])
     const mcp = (mcpConfigPaths ?? []).flatMap((path) => ['--mcp-config', path])
+    // Doc oficial confirma que `--settings` MESCLA com o settings.json do
+    // projeto/usuário (não substitui) — ver comentário no call-site em
+    // useXtermSession.ts. Se o próprio usuário já passou `--settings` nos
+    // extraArgs da aba, não injeta o nosso por cima: qual dos dois vence numa
+    // duplicata não está confirmado, e não é risco que vale correr aqui.
+    const hooks =
+      hooksSettingsPath && !clean.includes('--settings') ? ['--settings', hooksSettingsPath] : []
     if (sessionId) {
       return {
-        args: ['--resume', sessionId, ...mcp, ...clean],
+        args: ['--resume', sessionId, ...mcp, ...hooks, ...clean],
         sessionId,
         createdSession: false,
       }
     }
     const createdId = createUuid()
     return {
-      args: ['--session-id', createdId, ...mcp, ...clean],
+      args: ['--session-id', createdId, ...mcp, ...hooks, ...clean],
       sessionId: createdId,
       createdSession: true,
     }

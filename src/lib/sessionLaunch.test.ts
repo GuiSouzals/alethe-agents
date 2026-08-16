@@ -61,6 +61,56 @@ describe('buildAgentLaunch', () => {
     ).toEqual(['--conversation', 'agy-pane', '--dangerously-skip-permissions'])
   })
 
+  // Lord ADR-0013 D5 (etapa 5): --settings estende pra todo terminal Claude.
+  it('injects the hooks --settings path for new and resumed Claude sessions', () => {
+    const created = buildAgentLaunch(
+      'claude',
+      [],
+      undefined,
+      () => 'new-id',
+      undefined,
+      'C:\\temp\\alethe-agent-hooks.json',
+    )
+    expect(created.args).toEqual([
+      '--session-id',
+      'new-id',
+      '--settings',
+      'C:\\temp\\alethe-agent-hooks.json',
+    ])
+
+    const resumed = buildAgentLaunch(
+      'claude',
+      [],
+      'pane-session',
+      undefined,
+      undefined,
+      'C:\\temp\\alethe-agent-hooks.json',
+    )
+    expect(resumed.args).toEqual([
+      '--resume',
+      'pane-session',
+      '--settings',
+      'C:\\temp\\alethe-agent-hooks.json',
+    ])
+  })
+
+  it('never injects --settings when the path failed to resolve (best-effort)', () => {
+    const launch = buildAgentLaunch('claude', [], undefined, () => 'new-id', undefined, undefined)
+    expect(launch.args).toEqual(['--session-id', 'new-id'])
+  })
+
+  it("does not duplicate --settings when the tab already declares its own", () => {
+    const launch = buildAgentLaunch(
+      'claude',
+      ['--settings', '/user/own-settings.json'],
+      undefined,
+      () => 'new-id',
+      undefined,
+      'C:\\temp\\alethe-agent-hooks.json',
+    )
+    expect(launch.args).toEqual(['--session-id', 'new-id', '--settings', '/user/own-settings.json'])
+  })
+
   // Lord F1:
   it('Cursor launches with base args only and ignores unknown session ids for now', () => {
     expect(buildAgentLaunch('cursor', ['--model', 'auto'], 'chat-id').args).toEqual([

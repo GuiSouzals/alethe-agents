@@ -29,6 +29,7 @@ import {
 import { waitForSessionHint } from '../../lib/sessionWatch'
 import { acquireSpawnSlot, releaseSpawnSlot } from '../../lib/spawnQueue'
 import {
+  agentHooksSettingsPath,
   aiMemoryCodexConfigWrite,
   aiMemoryDetect,
   aiMemoryMcpConfigPath,
@@ -1105,8 +1106,28 @@ export function useXtermSession(params: {
           if (disposed) return
         }
 
+        // Lord ADR-0013 D5 (etapa 5): estende a injeção de hooks de subagente
+        // (SubagentStart/Stop, PreToolUse/PostToolUse, TaskCreated/Completed,
+        // TeammateIdle) pra TODO terminal Claude nascido do chassi, não só o
+        // do canvas da POC — era aí que o painel "Agentes" ficava cego pra
+        // orquestração normal. Doc oficial confirma que `--settings` MESCLA
+        // com o settings.json do projeto em vez de substituir (CLI arguments
+        // é uma das fontes que "merge across settings levels", não desliga
+        // os hooks do próprio Lord). Best-effort: falha aqui nunca bloqueia o
+        // spawn, só perde a projeção — o terminal sobe normalmente.
+        const hooksSettingsPath =
+          command === 'claude' ? await agentHooksSettingsPath().catch(() => undefined) : undefined
+        if (disposed) return
+
         const launch = command
-          ? buildAgentLaunch(command, preparedRuntime.args, resumeId, undefined, mcpConfigPaths)
+          ? buildAgentLaunch(
+              command,
+              preparedRuntime.args,
+              resumeId,
+              undefined,
+              mcpConfigPaths,
+              hooksSettingsPath,
+            )
           : { args: preparedRuntime.args, sessionId: undefined, createdSession: false }
         const spawnArgs = launch.args.length > 0 ? launch.args : undefined
         if (command && command !== 'shell') {
