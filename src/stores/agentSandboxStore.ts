@@ -4,7 +4,16 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 
 import { agentHooksEndpoint, agentHooksSettingsPath, agentHooksToken, codexAppServerSend, codexAppServerStop, killPty, listenPtyExit, spawnPty, writePty } from '../lib/tauri'
 
-export type SandboxNodeStatus = 'starting' | 'idle' | 'working' | 'done' | 'error'
+// Lord ADR-0013 D5: pré-requisito de renomeação antes de qualquer reconexão.
+// 'done'/'error' foram os rótulos originais e violavam a regra do ADR-0008
+// (herdada por D5): nunca confundir estado de PROCESSO com estado de
+// QUALIDADE — "done" lido como "pronto"/"concluído com sucesso" é
+// exatamente essa confusão (o PTY só EXISTIU, ninguém julgou o trabalho).
+// Vocabulário alinhado ao que `lib/orchestration.ts::OrchestrationEventType`
+// já usa pro mesmo problema: `exited` (== `process_exited` de lá) e
+// `failed` — nenhum dos dois implica "bem" ou "mal", só "o processo parou"
+// e "a tentativa não terminou como esperado", respectivamente.
+export type SandboxNodeStatus = 'starting' | 'idle' | 'working' | 'exited' | 'failed'
 
 export type SandboxNode = {
   id: string
@@ -188,7 +197,7 @@ export const useAgentSandboxStore = create<AgentSandboxState>((set, get) => ({
         const unlisten = await listenPtyExit(ptyId, () => {
           set((state) => ({
             nodes: state.nodes.map((item) =>
-              item.ptyId === ptyId ? { ...item, status: 'done' } : item,
+              item.ptyId === ptyId ? { ...item, status: 'exited' } : item,
             ),
           }))
         })
@@ -201,7 +210,7 @@ export const useAgentSandboxStore = create<AgentSandboxState>((set, get) => ({
       } catch {
         set((state) => ({
           nodes: state.nodes.map((item) =>
-            item.id === node.id ? { ...item, status: 'error' } : item,
+            item.id === node.id ? { ...item, status: 'failed' } : item,
           ),
         }))
       }
@@ -284,7 +293,7 @@ export const useAgentSandboxStore = create<AgentSandboxState>((set, get) => ({
       }))
     } catch {
       set((state) => ({
-        nodes: state.nodes.map((node) => (node.id === to ? { ...node, status: 'error' } : node)),
+        nodes: state.nodes.map((node) => (node.id === to ? { ...node, status: 'failed' } : node)),
       }))
     }
   },

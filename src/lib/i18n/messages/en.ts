@@ -1655,8 +1655,10 @@ export const en = {
   'sandbox.statusStarting': 'Starting',
   'sandbox.statusIdle': 'Idle',
   'sandbox.statusWorking': 'Working',
-  'sandbox.statusDone': 'Done',
-  'sandbox.statusError': 'Error',
+  // Lord ADR-0013 D5: renomeado de statusDone/statusError -- rótulo de
+  // processo, nunca de qualidade ("Done" lia como "ready"/"succeeded").
+  'sandbox.statusExited': 'Exited',
+  'sandbox.statusFailed': 'Failed',
   'sandbox.terminalPreview': 'Terminal preview',
   'sandbox.selectTerminal': 'Select an agent terminal to inspect it here.',
   'sandbox.resizeTerminal': 'Resize terminal',

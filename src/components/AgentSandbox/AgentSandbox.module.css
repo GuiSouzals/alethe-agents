@@ -207,8 +207,15 @@
 }
 
 .status_working { color: var(--accent); }
-.status_done { color: var(--status-success); }
-.status_error { color: var(--status-error); }
+/* Lord ADR-0013 D5: renomeado de status_done/status_error, e corrigido junto
+   um bug real achado na renomeação -- `--status-success`/`--status-error`
+   não existem em nenhum tema (`src/styles/theme.css`), então a cor nunca
+   renderizava (var() com token ausente cai pro herdado/inicial). Trocado
+   pelos tokens reais mais próximos: `exited` é neutro (processo só parou,
+   nunca "deu certo") e usa a mesma cor cinza de `idle`/`stopped`; `failed`
+   usa o vermelho real de "offline". */
+.status_exited { color: var(--status-stopped); }
+.status_failed { color: var(--status-offline); }
 
 .nodeRole {
   min-width: 0;

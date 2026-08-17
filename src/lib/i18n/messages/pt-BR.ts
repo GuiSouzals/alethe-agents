@@ -1667,8 +1667,10 @@ export const ptBR: Record<MessageKey, string> = {
   'sandbox.statusStarting': 'Iniciando',
   'sandbox.statusIdle': 'Parado',
   'sandbox.statusWorking': 'Trabalhando',
-  'sandbox.statusDone': 'Concluído',
-  'sandbox.statusError': 'Erro',
+  // Lord ADR-0013 D5: renomeado de statusDone/statusError -- rótulo de
+  // processo, nunca de qualidade ("Concluído" lia como "deu certo").
+  'sandbox.statusExited': 'Encerrado',
+  'sandbox.statusFailed': 'Falhou',
   'sandbox.terminalPreview': 'Prévia do terminal',
   'sandbox.selectTerminal': 'Selecione um terminal de agente para inspecioná-lo aqui.',
   'sandbox.resizeTerminal': 'Redimensionar terminal',

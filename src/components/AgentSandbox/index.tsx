@@ -11,13 +11,16 @@ import { Dropdown } from '../ui/Dropdown'
 
 export function AgentSandbox() {
   const t = useT()
-  const statusLabel = (status: 'starting' | 'idle' | 'working' | 'done' | 'error') => {
+  // Lord ADR-0013 D5: rótulos renomeados (pré-requisito antes de religar a
+  // fonte de dados) — "exited"/"failed" são estado de PROCESSO, nunca de
+  // qualidade do trabalho. Ver comentário em `agentSandboxStore.ts`.
+  const statusLabel = (status: 'starting' | 'idle' | 'working' | 'exited' | 'failed') => {
     switch (status) {
       case 'starting': return t('sandbox.statusStarting')
       case 'idle': return t('sandbox.statusIdle')
       case 'working': return t('sandbox.statusWorking')
-      case 'done': return t('sandbox.statusDone')
-      case 'error': return t('sandbox.statusError')
+      case 'exited': return t('sandbox.statusExited')
+      case 'failed': return t('sandbox.statusFailed')
     }
   }
   const activeProjectId = useProjectsStore((state) => state.activeProjectId)
