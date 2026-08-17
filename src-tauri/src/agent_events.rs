@@ -60,6 +60,12 @@ struct SpawnEventV1 {
     name: Option<String>,
     // Lord F3: O evento interno usa camelCase pela serialização da struct.
     parent_terminal_id: Option<String>,
+    // Lord: honestidade da verificação de escopo (manutenção pós-ADR-0013,
+    // item 2). `None` = escopo verificado contra a allowlist real do
+    // terminal de origem. `Some(code)` = a checagem NÃO pôde ser aplicada
+    // (ver `ScopeVisibility`); o request seguiu contido só por token + cwd +
+    // portão de confirmação humana, nunca bloqueado por isto -- só rotulado.
+    scope_note: Option<String>,
 }
 
 // Lord D1: Confirmações aceitas do consumidor único do workspace.
@@ -384,6 +390,45 @@ fn provider_allowed(provider: &str, allowed: Option<&[String]>) -> bool {
     }
 }
 
+// Lord: honestidade da verificação de escopo (manutenção pós-ADR-0013, item 2).
+// `provider_allowed` acima decide CORRETAMENTE não bloquear quando o escopo
+// não pôde ser verificado -- bloquear mataria toda ordem externa legítima, já
+// contida por token + casamento de cwd + portão de confirmação humana. O que
+// faltava era a UI saber DEPOIS que aquele despacho passou sem checagem, em
+// vez de aparentar que foi conferido. Este código nunca decide bloquear;
+// só rotula, pra `SpawnEventV1.scope_note` carregar a verdade.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum ScopeVisibility {
+    /// `parent_terminal_id` presente e `runtimesPermitidos` resolvido -- o
+    /// provider já passou pela allowlist real do terminal de origem.
+    Enforced,
+    /// Sem `parent_terminal_id`: ordem externa via HTTP, sem aba pai conhecida.
+    NoOrigin,
+    /// `parent_terminal_id` presente, mas o terminal é desconhecido ou é
+    /// aba anterior à D2 sem o campo `runtimesPermitidos`.
+    UnknownOrigin,
+}
+
+impl ScopeVisibility {
+    /// Código estável (não é texto de UI) que o frontend traduz por i18n.
+    /// `None` significa "nada a avisar": o escopo foi de fato verificado.
+    fn note_code(self) -> Option<&'static str> {
+        match self {
+            ScopeVisibility::Enforced => None,
+            ScopeVisibility::NoOrigin => Some("sem_terminal_origem"),
+            ScopeVisibility::UnknownOrigin => Some("terminal_origem_desconhecido"),
+        }
+    }
+}
+
+fn scope_visibility(parent_terminal_id: Option<&str>, allowed: Option<&[String]>) -> ScopeVisibility {
+    match (parent_terminal_id, allowed) {
+        (None, _) => ScopeVisibility::NoOrigin,
+        (Some(_), None) => ScopeVisibility::UnknownOrigin,
+        (Some(_), Some(_)) => ScopeVisibility::Enforced,
+    }
+}
+
 // Lord D1: Todas as respostas do contrato v1 são JSON e carregam `job_id`.
 fn respond_spawn(request: tiny_http::Request, response: SpawnResponseV1) {
     let status = spawn_http_status(&response);
@@ -467,8 +512,12 @@ pub fn start_listener(app: AppHandle) {
                 // token e forma do corpo — o provider precisa estar no conjunto que o
                 // usuário liberou para o terminal de origem (`parent_terminal_id`).
                 // Fronteira executável: recusa aqui, não só no prompt do agente.
+                let allowed = payload
+                    .parent_terminal_id
+                    .as_deref()
+                    .and_then(|terminal_id| runtimes_permitidos_for_terminal(&app, terminal_id));
+
                 if let Some(parent_terminal_id) = payload.parent_terminal_id.as_deref() {
-                    let allowed = runtimes_permitidos_for_terminal(&app, parent_terminal_id);
                     if !provider_allowed(&payload.provider, allowed.as_deref()) {
                         let response = SpawnResponseV1::rejected(
                             payload.request_id.clone(),
@@ -493,6 +542,12 @@ pub fn start_listener(app: AppHandle) {
                     }
                 }
 
+                // Lord: rótulo honesto de visibilidade (manutenção pós-ADR-0013, item 2).
+                // Calculado uma vez e carregado até o evento aceito abaixo -- não muda
+                // a decisão de bloquear, só torna visível quando ela não pôde ser tomada.
+                let scope_visibility =
+                    scope_visibility(payload.parent_terminal_id.as_deref(), allowed.as_deref());
+
                 let registry = app.state::<SpawnRegistry>();
                 let (created, received) = registry.begin(&payload.request_id, &payload.provider);
 
@@ -508,6 +563,7 @@ pub fn start_listener(app: AppHandle) {
                         origin: payload.origin,
                         name: payload.name,
                         parent_terminal_id: payload.parent_terminal_id,
+                        scope_note: scope_visibility.note_code().map(str::to_string),
                     };
                     eprintln!(
                         "[agent_events] /spawn provider={} request_id={} job_id={}",
@@ -680,6 +736,83 @@ mod tests {
     #[test]
     fn unknown_origin_terminal_does_not_block_until_d2_backfills_the_field() {
         assert!(provider_allowed("claude", None));
+    }
+
+    // Lord: honestidade da visibilidade de escopo (manutenção pós-ADR-0013, item 2).
+    // Estes três oráculos cobrem exatamente os casos que `provider_allowed`
+    // deixa passar sem bloquear -- a visibilidade é que muda, não a decisão.
+    #[test]
+    fn scope_visibility_is_enforced_when_origin_and_allowlist_are_both_known() {
+        let allowed = vec!["codex".to_string()];
+        assert_eq!(
+            scope_visibility(Some("terminal-1"), Some(&allowed)),
+            ScopeVisibility::Enforced
+        );
+    }
+
+    #[test]
+    fn scope_visibility_flags_no_origin_for_an_external_order_without_parent_terminal() {
+        assert_eq!(scope_visibility(None, None), ScopeVisibility::NoOrigin);
+    }
+
+    #[test]
+    fn scope_visibility_flags_unknown_origin_when_parent_terminal_has_no_resolved_allowlist() {
+        assert_eq!(
+            scope_visibility(Some("terminal-ghost"), None),
+            ScopeVisibility::UnknownOrigin
+        );
+    }
+
+    #[test]
+    fn only_the_not_enforced_variants_carry_a_note_code() {
+        assert_eq!(ScopeVisibility::Enforced.note_code(), None);
+        assert_eq!(ScopeVisibility::NoOrigin.note_code(), Some("sem_terminal_origem"));
+        assert_eq!(
+            ScopeVisibility::UnknownOrigin.note_code(),
+            Some("terminal_origem_desconhecido")
+        );
+    }
+
+    // Lord: o frontend precisa distinguir "null" (verificado) de um código de
+    // aviso -- confere a serialização camelCase de `scope_note` nos dois casos.
+    #[test]
+    fn spawn_event_serializes_scope_note_as_null_when_enforced() {
+        let event = SpawnEventV1 {
+            version: 1,
+            request_id: "request-1".to_string(),
+            job_id: "job-1".to_string(),
+            provider: "codex".to_string(),
+            task: "Implement the slice".to_string(),
+            cwd: None,
+            project_id: None,
+            origin: "lord".to_string(),
+            name: None,
+            parent_terminal_id: Some("terminal-1".to_string()),
+            scope_note: None,
+        };
+
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains(r#""scopeNote":null"#));
+    }
+
+    #[test]
+    fn spawn_event_serializes_scope_note_as_a_code_when_not_enforced() {
+        let event = SpawnEventV1 {
+            version: 1,
+            request_id: "request-1".to_string(),
+            job_id: "job-1".to_string(),
+            provider: "codex".to_string(),
+            task: "Implement the slice".to_string(),
+            cwd: None,
+            project_id: None,
+            origin: "lord".to_string(),
+            name: None,
+            parent_terminal_id: None,
+            scope_note: Some("sem_terminal_origem".to_string()),
+        };
+
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains(r#""scopeNote":"sem_terminal_origem""#));
     }
 
     #[test]

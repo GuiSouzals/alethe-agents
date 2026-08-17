@@ -30,6 +30,10 @@ Mudanças relevantes do **Alethe** para quem usa o app. Formato inspirado em
 - Added a live Remote Control device counter to the topbar, with direct access to the connection panel.
 - **A borda arco-íris agora é o indicador de foco de qualquer container da workspace, não só um efeito de cor de projeto.** Antes, só containers com a cor "arco-íris" escolhida no projeto mostravam o anel animado, sempre visível independente de foco. Agora qualquer container mostra a borda arco-íris enquanto estiver em foco (um terminal dele com o cursor/digitação ativa); sem foco, volta à borda normal por cor de projeto.
 
+### Adicionado
+
+- **O painel "Agentes despachados" agora mostra quando o escopo de despacho não pôde ser conferido, em vez de aparentar que foi (manutenção pós-ADR-0013, item 2).** `/spawn` continua aceitando ordem externa sem terminal de origem (`parent_terminal_id` ausente) — bloquear mataria todo despacho externo legítimo, já contido por token, casamento de `cwd` e o portão de confirmação humana. O que faltava era honestidade: o evento aceito agora carrega `scopeNote` (`sem_terminal_origem` / `terminal_origem_desconhecido`), e o painel mostra "escopo não aplicado" com o motivo em vez de ficar em silêncio.
+
 ### Corrigido
 
 - **Reiniciar um terminal pelo menu lateral, pelo inspetor, pelo histórico do Claude ou pelo "reset da última sessão" revogava o escopo de despacho em silêncio (Lord ADR-0013 D3, gap fechado).** A injeção de `runtimesPermitidos`/`LORD_RUNTIMES_PERMITIDOS` só tinha sido fiada no spawn inicial e no restart pelo botão da própria aba; os outros call-sites de `restartPty` (`ClaudeHistoryModal`, `resetLastSession`, `sidebarMenus`, `TerminalInspector`, e a migração pra worktree em `projectsStore.projectSlices.ts`) degradavam pra lista vazia — que pela regra do próprio ADR significa "não despacha para ninguém". Todos passam a encaminhar o campo da aba agora; teste de guarda novo (`restartPtyScope.test.ts`) varre o código-fonte e falha se um call-site futuro esquecer o campo.

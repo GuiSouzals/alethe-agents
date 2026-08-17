@@ -1106,6 +1106,16 @@ export const en = {
   'orchestration.panel.noTerminal': 'No terminal was created for this run',
   'orchestration.panel.count': '{count} in this session',
   'orchestration.panel.awaiting': 'awaiting your confirmation',
+  // Lord: scope-verification honesty (post-ADR-0013 maintenance, item 2). The
+  // dispatch was accepted WITHOUT the scope check being applicable — never
+  // shown as if it had been verified.
+  'orchestration.panel.scopeNoteHint':
+    'The origin terminal’s allowed-runtime scope could not be checked for this dispatch.',
+  'orchestration.panel.scopeNoteNoOrigin':
+    'Scope not applied: external order with no origin terminal.',
+  'orchestration.panel.scopeNoteUnknownOrigin':
+    'Scope not applied: origin terminal unknown or has no recorded scope.',
+  'orchestration.panel.scopeNoteUnknown': 'Scope not applied for this dispatch.',
   'orchestration.toast.title': '{provider} dispatched',
   'orchestration.toast.body': 'External order from {origin}.',
   'orchestration.toast.blockedTitle': '{provider} blocked',

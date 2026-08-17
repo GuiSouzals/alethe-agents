@@ -148,4 +148,19 @@ describe('Lord F3 orchestration reducer', () => {
     expect(effectiveOrchestrationPresentation('dev')).toBe('dev')
     expect(effectiveOrchestrationPresentation('animated')).toBe('dev')
   })
+
+  // Lord: honestidade da verificação de escopo (manutenção pós-ADR-0013, item
+  // 2) — o run precisa reter o `scopeNote` do primeiro evento que o carregou,
+  // do mesmo jeito que já faz com `parentTerminalId`.
+  it('persists scopeNote from the requested event onto the run', () => {
+    const requested = event('requested')
+    const withNote = { ...requested, scopeNote: 'sem_terminal_origem' }
+    const after = reduceOrchestrationProjection(EMPTY_ORCHESTRATION_PROJECTION, withNote)
+    expect(after.runsById['run-1'].scopeNote).toBe('sem_terminal_origem')
+  })
+
+  it('leaves scopeNote undefined when the backend verified the scope', () => {
+    const after = reduceOrchestrationProjection(EMPTY_ORCHESTRATION_PROJECTION, event('requested'))
+    expect(after.runsById['run-1'].scopeNote).toBeUndefined()
+  })
 })

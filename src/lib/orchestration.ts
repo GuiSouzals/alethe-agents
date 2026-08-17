@@ -47,6 +47,16 @@ export type OrchestrationEvent = {
   failureReason?: string
   finalTranscript?: string
   liveOutput: OrchestrationLiveOutput
+  /**
+   * Lord: honestidade da verificação de escopo (manutenção pós-ADR-0013,
+   * item 2). Código estável (`sem_terminal_origem`,
+   * `terminal_origem_desconhecido`) quando o `/spawn` aceitou o pedido SEM
+   * poder verificar o provider contra a allowlist do terminal de origem.
+   * `undefined` = verificado. Nunca implica bloqueio — a decisão de aceitar
+   * já foi tomada no Rust; isto só evita que a tela pareça ter conferido
+   * algo que não conferiu.
+   */
+  scopeNote?: string
 }
 
 export type OrchestrationRun = {
@@ -71,6 +81,8 @@ export type OrchestrationRun = {
   failureReason?: string
   finalTranscript?: string
   liveOutput: OrchestrationLiveOutput
+  /** Lord: ver `OrchestrationEvent.scopeNote` — mesma semântica, persistida no run. */
+  scopeNote?: string
 }
 
 // Lord: fonte única do rótulo de cada estado. Havia uma cópia local no componente de
@@ -196,6 +208,7 @@ export function reduceOrchestrationProjection(
     ptyId: base.ptyId ?? event.ptyId,
     internalAgentId: base.internalAgentId ?? event.internalAgentId,
     liveOutput: event.liveOutput,
+    scopeNote: base.scopeNote ?? event.scopeNote,
   }
 
   if (event.type === 'tool_started') {

@@ -25,6 +25,16 @@ export type AgentSpawnPayloadV1 = {
   origin: string
   name?: string
   parentTerminalId?: string
+  /**
+   * Lord: honestidade da verificação de escopo (manutenção pós-ADR-0013,
+   * item 2). `undefined` = o `/spawn` verificou o provider contra a
+   * allowlist real do terminal de origem. Presente = a checagem NÃO pôde
+   * ser aplicada (ordem externa sem `parentTerminalId`, ou terminal
+   * desconhecido/pré-D2) — o pedido não foi bloqueado por isso (é a
+   * decisão certa, ver `agent_events.rs::provider_allowed`), mas a tela
+   * precisa dizer que o escopo não foi conferido, nunca aparentar que foi.
+   */
+  scopeNote?: string
 }
 
 export type SpawnProject = Pick<Project, 'id' | 'defaultCwd'>
@@ -41,6 +51,7 @@ export type SpawnResolution =
       jobId: string
       origin: string
       parentTerminalId?: string
+      scopeNote?: string
     }
   | {
       status: 'invalid'
@@ -108,6 +119,7 @@ export function resolveSpawnTarget(
       jobId: payload.jobId,
       origin: payload.origin,
       parentTerminalId: payload.parentTerminalId,
+      scopeNote: payload.scopeNote,
     }
   }
 
@@ -127,5 +139,6 @@ export function resolveSpawnTarget(
     jobId: payload.jobId,
     origin: payload.origin,
     parentTerminalId: payload.parentTerminalId,
+    scopeNote: payload.scopeNote,
   }
 }

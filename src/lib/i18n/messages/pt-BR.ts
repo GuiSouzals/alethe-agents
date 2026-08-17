@@ -1118,6 +1118,16 @@ export const ptBR: Record<MessageKey, string> = {
   'orchestration.panel.noTerminal': 'Nenhum terminal foi criado para esta execução',
   'orchestration.panel.count': '{count} nesta sessão',
   'orchestration.panel.awaiting': 'aguardando sua confirmação',
+  // Lord: honestidade da verificação de escopo (manutenção pós-ADR-0013, item
+  // 2). O despacho foi aceito SEM que a checagem de escopo pudesse ser
+  // aplicada — nunca aparece como se tivesse sido verificado.
+  'orchestration.panel.scopeNoteHint':
+    'O conjunto de runtimes permitidos do terminal de origem não pôde ser conferido para este despacho.',
+  'orchestration.panel.scopeNoteNoOrigin':
+    'Escopo não aplicado: ordem externa sem terminal de origem.',
+  'orchestration.panel.scopeNoteUnknownOrigin':
+    'Escopo não aplicado: terminal de origem desconhecido ou sem escopo registrado.',
+  'orchestration.panel.scopeNoteUnknown': 'Escopo não aplicado para este despacho.',
   'orchestration.toast.title': '{provider} despachado',
   'orchestration.toast.body': 'Ordem externa vinda de {origin}.',
   'orchestration.toast.blockedTitle': '{provider} bloqueado',

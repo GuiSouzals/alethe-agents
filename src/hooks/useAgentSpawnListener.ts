@@ -75,6 +75,10 @@ function spawnProjectionEvent(
     source: 'external_spawn',
     occurredAt: Date.now(),
     parentTerminalId: decision.parentTerminalId,
+    // Lord: honestidade da verificação de escopo (manutenção pós-ADR-0013,
+    // item 2) — presente quando o `/spawn` não pôde checar o provider contra
+    // a allowlist real do terminal de origem (ver `agent_events.rs`).
+    scopeNote: decision.scopeNote,
     liveOutput: 'pty',
     ...details,
   }

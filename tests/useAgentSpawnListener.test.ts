@@ -86,6 +86,21 @@ describe('resolveSpawnTarget', () => {
       reason: 'store_not_hydrated',
     })
   })
+
+  // Lord: honestidade da verificação de escopo (manutenção pós-ADR-0013,
+  // item 2) — o código que o Rust manda em `scopeNote` precisa sobreviver
+  // à resolução pura, senão a UI nunca teria como mostrá-lo.
+  it('propagates scopeNote through to a matched decision', () => {
+    expect(
+      resolveSpawnTarget(payload({ scopeNote: 'sem_terminal_origem' }), projects, true),
+    ).toMatchObject({ status: 'matched', scopeNote: 'sem_terminal_origem' })
+  })
+
+  it('leaves scopeNote undefined when the backend verified the scope', () => {
+    const decision = resolveSpawnTarget(payload(), projects, true)
+    if (decision.status !== 'matched') throw new Error('fixture must match')
+    expect(decision.scopeNote).toBeUndefined()
+  })
 })
 
 describe('executeAgentSpawn', () => {
@@ -213,5 +228,28 @@ describe('executeAgentSpawn', () => {
 
     expect(dependencies.createTerminal).toHaveBeenCalledTimes(2)
     expect(focusTerminal).toHaveBeenCalledOnce()
+  })
+
+  // Lord: honestidade da verificação de escopo (manutenção pós-ADR-0013,
+  // item 2) — o run projetado precisa carregar o mesmo `scopeNote` que veio
+  // do backend, senão o painel "Agentes" não tem como avisar que o escopo
+  // não foi conferido para este despacho.
+  it('records the scopeNote on the projected event when the backend could not verify scope', async () => {
+    const recordEvent = vi.fn()
+
+    await executeAgentSpawn(payload({ scopeNote: 'sem_terminal_origem' }), {
+      hydrated: true,
+      projects,
+      claim: vi.fn(async () => true),
+      report: vi.fn(async () => undefined),
+      createTerminal: vi.fn(async () => ({ id: 'terminal-1' })),
+      focusTerminal: vi.fn(),
+      recordEvent,
+    })
+
+    expect(recordEvent).toHaveBeenCalled()
+    for (const call of recordEvent.mock.calls) {
+      expect(call[0]).toMatchObject({ scopeNote: 'sem_terminal_origem' })
+    }
   })
 })

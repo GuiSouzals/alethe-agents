@@ -166,6 +166,17 @@ montado incondicionalmente em `src/App.tsx:207`. O fluxo: resolve o alvo
 antigos não participam mais deste caminho** — o evento v1 é exclusivo justamente para não
 acordá-los.
 
+**Visibilidade honesta do escopo (`scopeNote`).** `SpawnEventV1` carrega `scope_note:
+Option<String>` (serializado `scopeNote`, ver `agent_events.rs::ScopeVisibility`). Ausência
+de `parent_terminal_id` (ordem externa sem aba pai) **não bloqueia** o `/spawn` — é decisão
+correta, contida por token + casamento de `cwd` + portão de confirmação humana — mas o campo
+torna essa ausência de verificação visível em vez de deixar a tela parecer que conferiu algo
+que não conferiu. Valores: `null` (escopo verificado contra o `runtimesPermitidos` real do
+terminal de origem), `"sem_terminal_origem"` (sem `parent_terminal_id`) ou
+`"terminal_origem_desconhecido"` (`parent_terminal_id` presente, mas terminal desconhecido ou
+aba anterior à D2 sem o campo). O frontend traduz o código por i18n e mostra no painel
+"Agentes despachados" (`OrchestrationPanel`, `SCOPE_NOTE_KEYS`) — nunca cru na tela.
+
 > **Atenção a quem adicionar provider:** há **duas** allowlists independentes —
 > `agent_events.rs:250-259` (Rust) e `SPAWN_PROVIDERS` em
 > `src/hooks/resolveSpawnTarget.ts:7-13` (TypeScript). Mudar só uma faz o `/spawn`

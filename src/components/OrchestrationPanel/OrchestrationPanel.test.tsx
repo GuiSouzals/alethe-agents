@@ -83,6 +83,35 @@ describe('painel global de agentes despachados', () => {
     act(() => root.unmount())
   })
 
+  // Lord: honestidade da verificação de escopo (manutenção pós-ADR-0013, item
+  // 2) — a recusa nunca é bloqueada quando não há terminal de origem (ordem
+  // externa legítima), mas isso precisa ficar visível, nunca aparentar que
+  // o escopo foi conferido.
+  it('mostra que o escopo não foi aplicado quando a ordem externa não tem terminal de origem', () => {
+    const semOrigem: OrchestrationRun = { ...externo, scopeNote: 'sem_terminal_origem' }
+    useOrchestrationStore.setState({
+      runsById: { [semOrigem.runId]: semOrigem },
+      runOrder: [semOrigem.runId],
+      seenEventIds: {},
+    })
+    const { container, root } = render()
+
+    expect(container.textContent).toContain('Scope not applied: external order with no origin terminal.')
+    act(() => root.unmount())
+  })
+
+  it('não mostra aviso de escopo quando o backend verificou o despacho', () => {
+    useOrchestrationStore.setState({
+      runsById: { [externo.runId]: externo },
+      runOrder: [externo.runId],
+      seenEventIds: {},
+    })
+    const { container, root } = render()
+
+    expect(container.textContent).not.toContain('Scope not applied')
+    act(() => root.unmount())
+  })
+
   it('mostra a execução mais recente primeiro', () => {
     useOrchestrationStore.setState({
       runsById: { [externo.runId]: externo, [interno.runId]: interno },

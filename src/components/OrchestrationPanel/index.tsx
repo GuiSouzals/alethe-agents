@@ -2,7 +2,7 @@ import { Radar, TerminalSquare } from 'lucide-react'
 import { useMemo } from 'react'
 
 import { focusOrchestrationTerminal } from '../../hooks/focusOrchestrationTerminal'
-import { useT } from '../../lib/i18n'
+import { useT, type MessageKey } from '../../lib/i18n'
 import { ORCHESTRATION_STATUS_KEYS } from '../../lib/orchestration'
 import { AGENT_TYPE_LABELS } from '../../lib/types'
 import { useOrchestrationStore } from '../../stores/orchestrationStore'
@@ -10,6 +10,15 @@ import { useProjectsStore } from '../../stores/projectsStore'
 import { AgentIcon } from '../icons/AgentIcons'
 import { EmptyState } from '../EmptyState'
 import styles from './OrchestrationPanel.module.css'
+
+// Lord: honestidade da verificação de escopo (manutenção pós-ADR-0013, item 2).
+// Códigos vêm do Rust (`agent_events.rs::ScopeVisibility::note_code`) e nunca
+// são texto de UI — o `t(...)` faz a tradução; um código desconhecido cai no
+// aviso genérico em vez de aparecer cru na tela.
+const SCOPE_NOTE_KEYS: Record<string, MessageKey> = {
+  sem_terminal_origem: 'orchestration.panel.scopeNoteNoOrigin',
+  terminal_origem_desconhecido: 'orchestration.panel.scopeNoteUnknownOrigin',
+}
 
 // Lord: até aqui, um agente despachado só era visível dentro do painel do terminal que
 // ele mesmo criou. Quem estava noutro projeto ou com o grupo recolhido não via nada.
@@ -77,6 +86,12 @@ export function OrchestrationPanel() {
 
                 {run.failureReason ? (
                   <div className={styles.failure}>{run.failureReason}</div>
+                ) : null}
+
+                {run.scopeNote ? (
+                  <div className={styles.scopeNote} title={t('orchestration.panel.scopeNoteHint')}>
+                    {t(SCOPE_NOTE_KEYS[run.scopeNote] ?? 'orchestration.panel.scopeNoteUnknown')}
+                  </div>
                 ) : null}
 
                 {openable ? (

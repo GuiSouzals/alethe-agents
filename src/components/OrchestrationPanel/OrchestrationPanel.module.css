@@ -123,6 +123,15 @@
   word-break: break-word;
 }
 
+.scopeNote {
+  margin-top: 4px;
+  padding: 4px 6px;
+  border-left: 2px solid var(--accent-border);
+  color: var(--fg-faint);
+  font: 9px/1.4 var(--font-sans, inherit);
+  word-break: break-word;
+}
+
 .open {
   margin-top: 6px;
   display: inline-flex;
