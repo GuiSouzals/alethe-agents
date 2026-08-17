@@ -205,6 +205,8 @@ export type ProjectsState = ProjectsFile & {
         automatedSpawn?: boolean
         /** Lord ADR-0013 D2: default restritivo — omitido vira só o próprio tipo. */
         runtimesPermitidos?: AgentType[]
+        /** Lord: omitido vira `true` — aba nova pede confirmação de gasto. */
+        exigeConfirmacaoDeGasto?: boolean
         /** Lord ADR-0014 D3: ver `SubTab.transcriptCapture`. */
         transcriptCapture?: { demandaDir: string; agente: string; assunto: string }
       }
@@ -238,6 +240,8 @@ export type ProjectsState = ProjectsFile & {
         automatedSpawn?: boolean
         /** Lord ADR-0013 D2: default restritivo — omitido vira só o próprio tipo. */
         runtimesPermitidos?: AgentType[]
+        /** Lord: omitido vira `true` — aba nova pede confirmação de gasto. */
+        exigeConfirmacaoDeGasto?: boolean
         /** Lord ADR-0014 D3: ver `SubTab.transcriptCapture`. */
         transcriptCapture?: { demandaDir: string; agente: string; assunto: string }
       }
@@ -315,6 +319,8 @@ export type ProjectsState = ProjectsFile & {
       orchestrationInternalAgentId?: string
       /** Lord ADR-0013 D2: default restritivo — omitido vira só o próprio tipo. */
       runtimesPermitidos?: AgentType[]
+      /** Lord: omitido vira `true` — sub-tab nova pede confirmação de gasto. */
+      exigeConfirmacaoDeGasto?: boolean
     },
   ) => SubTab
   closeSubTab: (projectId: string, terminalId: string, tabId: string) => void
@@ -350,6 +356,13 @@ export type ProjectsState = ProjectsFile & {
     terminalId: string,
     tabId: string,
     runtimesPermitidos: AgentType[],
+  ) => void
+  /** Lord: idem — só o usuário liga/desliga o portão de gasto de uma aba viva. */
+  setSubTabExigeConfirmacaoDeGasto: (
+    projectId: string,
+    terminalId: string,
+    tabId: string,
+    exige: boolean,
   ) => void
 
   // preferences / cli

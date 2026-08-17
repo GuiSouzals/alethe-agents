@@ -56,6 +56,13 @@ export function buildSchedulerTaskFirstTab(provider: AgentType, taskTitle: strin
     initialInput: taskPrompt(taskTitle),
     orchestrationOrigin: 'scheduler',
     automatedSpawn: true,
+    // Lord: declarado, não herdado por omissão. O portão passou a ser campo da
+    // aba (`SubTab.exigeConfirmacaoDeGasto`) em vez da preferência global, e
+    // ausência do campo já cai no lado seguro — mas terminal que nasce de tick
+    // do backend, sem clique humano, é exatamente o caso que o portão existe
+    // para cobrir. Deixar isso implícito seria confiar em default alheio para
+    // proteger gasto.
+    exigeConfirmacaoDeGasto: true,
   }
 }
 

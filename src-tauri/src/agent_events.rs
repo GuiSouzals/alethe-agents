@@ -8,6 +8,7 @@
 
 use std::fs;
 use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -121,11 +122,31 @@ fn listener_endpoint(port: u16) -> String {
     format!("http://{HOST}:{port}")
 }
 
-// Lord D1: Publica transporte e versão; o listener recebe somente trabalho pronto para executar.
-fn write_listener_discovery(app: &AppHandle, port: u16) -> Result<(), String> {
+// Lord: montagem pura do caminho, a partir de um diretório de perfil já
+// resolvido. Separada de `listener_discovery_path` (que precisa do `AppHandle`)
+// só para ficar testável sem app de verdade — mesmo padrão de
+// `extract_runtimes_permitidos` (puro) + `runtimes_permitidos_for_terminal`
+// (invólucro fino com `AppHandle`).
+fn discovery_path_in(profile_dir: &Path) -> PathBuf {
+    profile_dir.join(DISCOVERY_FILE_NAME)
+}
+
+/// Caminho absoluto do `lord-agent-listener.json` do perfil ATIVO.
+///
+/// Fonte única: quem escreve o arquivo (`write_listener_discovery`) e quem só
+/// precisa do caminho (a env var `LORD_SPAWN_DISCOVERY` em `pty.rs`) chamam
+/// esta função. Montar o caminho em dois lugares divergiria no dia em que o
+/// nome do arquivo ou o layout de perfil mudar — e uma cópia velha aponta para
+/// um arquivo que não existe mais, sem erro nenhum.
+pub fn listener_discovery_path(app: &AppHandle) -> Result<PathBuf, String> {
     let profile = crate::profiles::active_profile_state(app)?;
     let profile_dir = crate::profiles::profile_data_dir_for_id(app, &profile.id)?;
-    let path = profile_dir.join(DISCOVERY_FILE_NAME);
+    Ok(discovery_path_in(&profile_dir))
+}
+
+// Lord D1: Publica transporte e versão; o listener recebe somente trabalho pronto para executar.
+fn write_listener_discovery(app: &AppHandle, port: u16) -> Result<(), String> {
+    let path = listener_discovery_path(app)?;
     let discovery = serde_json::json!({
         "endpoint": listener_endpoint(port),
         "token": init_token(),
@@ -651,6 +672,29 @@ pub fn start_listener(app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Lord: o caminho do arquivo de descoberta é montado num único lugar —
+    // `write_listener_discovery` (quem escreve) e a env var LORD_SPAWN_DISCOVERY
+    // em `pty.rs` (quem só aponta) passam por esta mesma função.
+    #[test]
+    fn discovery_path_lands_inside_the_profile_dir_it_was_given() {
+        let profile_dir = Path::new(r"C:\dados\profiles\default");
+        let path = discovery_path_in(profile_dir);
+
+        assert_eq!(path.parent(), Some(profile_dir));
+        assert_eq!(
+            path.file_name().and_then(|name| name.to_str()),
+            Some(DISCOVERY_FILE_NAME)
+        );
+    }
+
+    // O nome do arquivo é contrato publicado: a ponte de despacho
+    // (`src/lib/spawnBridge.ts`) manda o agente ler o arquivo apontado pela env
+    // var, e §3.1 do LORD-CHASSI.md documenta este nome.
+    #[test]
+    fn discovery_file_name_matches_the_published_bridge_contract() {
+        assert_eq!(DISCOVERY_FILE_NAME, "lord-agent-listener.json");
+    }
 
     // Lord D1: O parser comprova a ruptura intencional com o payload fire-and-forget.
     #[test]

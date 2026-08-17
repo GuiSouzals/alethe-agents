@@ -871,6 +871,19 @@ export const ptBR: Record<MessageKey, string> = {
     'Se este terminal um dia pedir para outra IA fazer algo por ele, só vai poder chamar as ferramentas marcadas abaixo. Exemplo: deixe só o Codex marcado e ele só vai conseguir pedir ao Codex — nunca ao Claude ou ao Cursor. Por padrão, só ele mesmo vem marcado.',
   'term.stepScopeEmptyWarning':
     'Nada marcado: este terminal não vai conseguir chamar nenhuma outra IA.',
+  // Lord: o chip deixa de ser só autorização quando você marca mais de um runtime.
+  // Marcar o segundo É o pedido explícito de despacho — o terminal nasce sabendo
+  // como acionar os outros. O portão de confirmação continua valendo para provider pago.
+  // Lord: o portão de gasto era preferência GLOBAL no rodapé da aba "Agentes" —
+  // ligá-lo para uma cadeia automática desligava a confirmação de todo terminal
+  // aberto, inclusive os esquecidos. A decisão passa a morar aqui, junto do
+  // alcance de despacho, porque é o mesmo assunto: o que este terminal pode
+  // fazer com o dinheiro do dono. Por terminal, e nascendo ligado.
+  'term.stepScopeConfirm': 'Pedir minha confirmação antes de cada despacho pago',
+  'term.stepScopeConfirmHint':
+    'Ligado, um pedido deste terminal a Claude, Codex, Cursor ou OpenCode abre a aba mas não envia o prompt até você clicar — nada é cobrado antes disso. Desligado, este terminal passa a gastar no ato, e vale só para ele.',
+  'term.stepScopeBridge':
+    'Mais de um marcado: este terminal nasce sabendo pedir uma fatia às outras ferramentas marcadas. Cada pedido a provider pago ainda para no portão de confirmação antes de gastar.',
   'term.browse': 'Procurar',
   'term.recentFolders': 'Pastas recentes',
   'term.autoNameHint': 'O nome será gerado automaticamente.',
@@ -1106,6 +1119,11 @@ export const ptBR: Record<MessageKey, string> = {
   'orchestration.internal.readOnly': 'Subagente interno — visualização somente leitura',
   'orchestration.internal.noLiveOutput': 'Este provider não emite saída ao vivo deste subagente.',
   'orchestration.internal.noTranscript': 'Este provider não emitiu um transcript final.',
+  // Lord: a faixa inline mostra só o que está vivo. Run encerrada vira contador —
+  // a lista completa já existe na aba "Agentes", com rolagem própria. Sem isto a
+  // faixa cresce sem fim e espreme a área do terminal até zero.
+  'orchestration.activity.finished': '+{count} encerrados',
+  'orchestration.activity.finishedHint': 'Ver todos na aba Agentes',
   // Lord: lista global de agentes despachados. Vocabulário de processo — nunca de aprovação.
   'orchestration.panel.title': 'Agentes despachados',
   'orchestration.panel.emptyTitle': 'Nenhum agente despachado',
@@ -1117,6 +1135,14 @@ export const ptBR: Record<MessageKey, string> = {
   'orchestration.panel.open': 'Abrir terminal',
   'orchestration.panel.noTerminal': 'Nenhum terminal foi criado para esta execução',
   'orchestration.panel.count': '{count} nesta sessão',
+  // Lord: o painel listava tudo numa pilha só, então abrir outro terminal ou outro
+  // projeto mostrava a mesma lista. Agora agrupa por terminal de origem, com o
+  // terminal ativo em primeiro. Agrupar em vez de filtrar é deliberado: filtrar
+  // recriaria a cegueira que este painel foi feito para resolver — despacho que
+  // ninguém vê porque nasceu noutro terminal.
+  'orchestration.panel.groupThisTerminal': 'Este terminal',
+  'orchestration.panel.groupNoOrigin': 'Sem terminal de origem',
+  'orchestration.panel.otherProjects': '{count} em outros projetos',
   'orchestration.panel.awaiting': 'aguardando sua confirmação',
   // Lord: honestidade da verificação de escopo (manutenção pós-ADR-0013, item
   // 2). O despacho foi aceito SEM que a checagem de escopo pudesse ser
@@ -1142,9 +1168,9 @@ export const ptBR: Record<MessageKey, string> = {
   'orchestration.pending.discarded': 'Prompt descartado. Nada foi enviado.',
   'orchestration.pending.banner':
     'Ordem externa vinda de {origin} aguarda sua confirmação. Nada foi digitado neste terminal.',
-  'orchestration.pending.autoRun': 'Executar ordens externas sem perguntar',
-  'orchestration.pending.autoRunHint':
-    'Ligado, um POST /spawn começa a gastar no provider imediatamente, sem etapa de confirmação.',
+  // Lord: 'orchestration.pending.autoRun' e '.autoRunHint' saíram junto da caixa
+  // global no rodapé do painel de agentes. O portão agora é por terminal —
+  // 'term.stepScopeConfirm' e 'term.stepScopeConfirmHint', no modal.
   'ui.terminal.responseReady': 'Resposta pronta',
   'ui.terminal.working': 'Terminal em ação',
   'ui.terminal.noCwdAvailable': 'Sem cwd disponível pra abrir no {label}.',

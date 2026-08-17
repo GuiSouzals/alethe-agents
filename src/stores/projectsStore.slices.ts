@@ -129,6 +129,7 @@ type SubTabsSlice = Pick<
   | 'setSubTabSessionId'
   | 'setSubTabInitialInput'
   | 'setSubTabRuntimesPermitidos'
+  | 'setSubTabExigeConfirmacaoDeGasto'
 >
 
 export function createSubTabsSlice({ updateTerminal, updateSubTab }: SliceCtx): SubTabsSlice {
@@ -153,6 +154,9 @@ export function createSubTabsSlice({ updateTerminal, updateSubTab }: SliceCtx): 
         orchestrationInternalAgentId: args.orchestrationInternalAgentId,
         // Lord ADR-0013 D2: default restritivo — só o runtime da própria aba.
         runtimesPermitidos: args.runtimesPermitidos ?? [args.type],
+        // Lord: mesma regra do default restritivo, aplicada ao dinheiro — sub-tab
+        // criada sem opinião nasce pedindo confirmação antes de despacho pago.
+        exigeConfirmacaoDeGasto: args.exigeConfirmacaoDeGasto ?? true,
       }
       updateTerminal(projectId, terminalId, (t) => ({
         ...t,
@@ -226,6 +230,15 @@ export function createSubTabsSlice({ updateTerminal, updateSubTab }: SliceCtx): 
       updateSubTab(projectId, terminalId, tabId, (s) => ({
         ...s,
         runtimesPermitidos: [...new Set(runtimesPermitidos)],
+      })),
+
+    // Lord: mesma disciplina do `setSubTabRuntimesPermitidos` — só o usuário
+    // muda o portão de gasto de um terminal já aberto, e a mudança vale para
+    // essa aba só. O agente nunca chama isto para se liberar.
+    setSubTabExigeConfirmacaoDeGasto: (projectId, terminalId, tabId, exige) =>
+      updateSubTab(projectId, terminalId, tabId, (s) => ({
+        ...s,
+        exigeConfirmacaoDeGasto: exige === true,
       })),
   }
 }

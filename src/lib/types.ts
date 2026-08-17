@@ -141,6 +141,20 @@ export type SubTab = {
    * conjunto (D2).
    */
   runtimesPermitidos: AgentType[]
+  /**
+   * Lord: ESTE terminal pede confirmação humana antes de cada despacho pago
+   * (provider de `PAID_SPAWN_PROVIDERS` recebendo prompt de ordem externa ou de
+   * automação interna). Nasce `true` e só o usuário desliga, no modal de novo
+   * terminal — mesmo lugar do `runtimesPermitidos`, porque é a mesma decisão:
+   * o que este terminal pode fazer com o dinheiro do dono.
+   *
+   * Substitui a preferência GLOBAL `externalSpawnAutoRun` como fonte da decisão
+   * do portão: desligar o portão para uma cadeia automática não pode desligá-lo
+   * nos terminais esquecidos. Backfill de aba pré-existente é sempre `true`,
+   * inclusive quando o perfil tem `externalSpawnAutoRun: true` gravado —
+   * segurança não se degrada em migração.
+   */
+  exigeConfirmacaoDeGasto: boolean
   /** Lord F3: Origem declarada do despacho, sem conteúdo de prompt ou julgamento. */
   orchestrationOrigin?: string
   /** Lord F3: IDs estáveis mínimos para retomar, correlacionar e focar a execução. */
@@ -466,12 +480,13 @@ export type Preferences = {
   spawnConcurrency: number
   /** Lord F3: Apresentação preferida; `dev` é o default e único modo habilitado. */
   orchestrationPresentation: OrchestrationPresentation
-  /**
-   * Lord: ordem externa (`POST /spawn`) escreve o prompt no CLI pago sem passar
-   * pelo portão de confirmação humana. Default false — nada chega a um provider
-   * cobrado antes de um clique explícito.
-   */
-  externalSpawnAutoRun: boolean
+  // Lord: aqui existia `externalSpawnAutoRun`, preferência GLOBAL que desligava o
+  // portão de confirmação de gasto de todo terminal do app. Removida junto da
+  // caixa no rodapé do painel de agentes: a decisão é POR TERMINAL agora, em
+  // `SubTab.exigeConfirmacaoDeGasto`, escolhida no modal ao lado do alcance de
+  // despacho. Perfis antigos podem ter a chave gravada em `projects.json`; ela é
+  // simplesmente ignorada na leitura — e ignorar só torna o portão MAIS restrito,
+  // nunca menos.
   /** Limites de RAM e política de estacionamento automático dos runtimes. */
   resourcePolicy: ResourcePolicyPreferences
   /** v2.2 — grid layout custom da workspace inteira (cross-grupo). */
@@ -595,8 +610,6 @@ export const DEFAULT_PREFERENCES: Preferences = {
   spawnConcurrency: 3,
   // Lord F3: PTY real e aberto é a experiência padrão de orquestração.
   orchestrationPresentation: 'dev',
-  // Lord: ordem externa espera confirmação humana antes de gastar no CLI pago.
-  externalSpawnAutoRun: false,
   resourcePolicy: {
     mode: 'manual',
     automaticParkingOptIn: false,

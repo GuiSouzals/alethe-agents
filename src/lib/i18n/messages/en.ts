@@ -863,6 +863,13 @@ export const en = {
     "If this terminal ever asks another AI to do something for it, it can only call the tools checked below. Example: leave only Codex checked and it can only ask Codex — never Claude or Cursor. By default, only itself is checked.",
   'term.stepScopeEmptyWarning':
     "Nothing checked: this terminal won't be able to call any other AI at all.",
+  // Lord: checking a second runtime IS the explicit dispatch request — see pt-BR note.
+  // Lord: the spend gate moved from a global preference to a per-terminal choice — see pt-BR note.
+  'term.stepScopeConfirm': 'Ask me to confirm before each paid dispatch',
+  'term.stepScopeConfirmHint':
+    "When on, a request from this terminal to Claude, Codex, Cursor or OpenCode opens the tab but does not send the prompt until you click — nothing is billed before that. When off, this terminal starts spending immediately, and only this one.",
+  'term.stepScopeBridge':
+    'More than one checked: this terminal starts out knowing how to ask the other checked tools for a slice. Every request to a paid provider still stops at the confirmation gate before spending.',
   'term.browse': 'Browse',
   'term.recentFolders': 'Recent folders',
   'term.autoNameHint': 'Name will be generated automatically.',
@@ -1094,6 +1101,9 @@ export const en = {
   'orchestration.internal.noLiveOutput':
     'This provider does not emit live output for this subagent.',
   'orchestration.internal.noTranscript': 'This provider did not emit a final transcript.',
+  // Lord: inline strip shows only live runs — see pt-BR note.
+  'orchestration.activity.finished': '+{count} finished',
+  'orchestration.activity.finishedHint': 'See all in the Agents tab',
   // Lord: global list of dispatched agents. Process vocabulary only — never approval.
   'orchestration.panel.title': 'Dispatched agents',
   'orchestration.panel.emptyTitle': 'No agent dispatched',
@@ -1105,6 +1115,10 @@ export const en = {
   'orchestration.panel.open': 'Open terminal',
   'orchestration.panel.noTerminal': 'No terminal was created for this run',
   'orchestration.panel.count': '{count} in this session',
+  // Lord: grouped by origin terminal, active terminal first — see pt-BR note.
+  'orchestration.panel.groupThisTerminal': 'This terminal',
+  'orchestration.panel.groupNoOrigin': 'No origin terminal',
+  'orchestration.panel.otherProjects': '{count} in other projects',
   'orchestration.panel.awaiting': 'awaiting your confirmation',
   // Lord: scope-verification honesty (post-ADR-0013 maintenance, item 2). The
   // dispatch was accepted WITHOUT the scope check being applicable — never
@@ -1130,9 +1144,7 @@ export const en = {
   'orchestration.pending.discarded': 'Prompt discarded. Nothing was sent.',
   'orchestration.pending.banner':
     'External order from {origin} is waiting for your confirmation. Nothing was typed into this terminal.',
-  'orchestration.pending.autoRun': 'Run external orders without asking',
-  'orchestration.pending.autoRunHint':
-    'When on, a POST /spawn starts spending on the provider immediately, with no confirmation step.',
+  // Lord: the global autoRun strings left with the panel-footer checkbox — see pt-BR note.
   'ui.terminal.responseReady': 'Response ready',
   'ui.terminal.working': 'Terminal is working',
   'ui.terminal.noCwdAvailable': 'No cwd available to open in {label}.',

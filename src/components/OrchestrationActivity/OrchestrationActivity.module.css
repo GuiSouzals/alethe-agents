@@ -1,6 +1,14 @@
 /* Lord F3: Projeção neutra e compacta; não usa cores de aprovação. */
+/* Lord: teto de layout como rede de segurança. Antes a faixa era `flex: 0 0 auto`
+   sem `max-height` nem `overflow`, irmã de `.terminalArea { flex: 1 }` — cada run
+   nova a fazia crescer e o terminal ia a zero. Com o teto, mesmo com muitas runs
+   VIVAS ao mesmo tempo a faixa rola dentro de si e a área do terminal nunca é
+   espremida a zero. O filtro de runs encerradas é a correção principal; isto é o
+   que segura o caso em que só existem runs vivas. */
 .activity {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  max-height: min(30%, 200px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -58,6 +66,29 @@
 .navigation button:hover {
   color: var(--fg);
   background: var(--panel-hover);
+  border-color: var(--border-strong);
+}
+
+/* Lord: linha única de encerrados — ocupa altura de texto, nunca de cartão. */
+.finished {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  text-align: left;
+  color: var(--fg-faint);
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  cursor: pointer;
+}
+
+/* Sem ação de store para abrir a aba "Agentes", a linha é texto: não finge ser clicável. */
+div.finished {
+  cursor: default;
+}
+
+.finished:hover {
+  color: var(--fg-muted);
   border-color: var(--border-strong);
 }
 

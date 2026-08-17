@@ -89,9 +89,10 @@ export function normalizePreferences(raw: LegacyPreferences | undefined): Prefer
     // Lord F3: Ausência ou valor desconhecido volta ao modo dev; animated fica apenas preparado.
     orchestrationPresentation:
       preferences.orchestrationPresentation === 'animated' ? 'animated' : 'dev',
-    // Lord: só um `true` explícito no arquivo dispensa a confirmação humana da
-    // ordem externa; ausência, `undefined` ou lixo caem no portão.
-    externalSpawnAutoRun: raw?.externalSpawnAutoRun === true,
+    // Lord: `externalSpawnAutoRun` saiu daqui junto da preferência. Perfil antigo
+    // pode ter a chave gravada; ela é ignorada de propósito, e ignorar deixa o
+    // portão MAIS restrito, nunca menos. Quem decide agora é a aba
+    // (`SubTab.exigeConfirmacaoDeGasto`), com backfill sempre em `true`.
     resourcePolicy: {
       // Older installs inherited Smart LRU without an explicit choice. Migrate
       // them to monitor-only so an update never starts terminating PTYs.
@@ -135,6 +136,22 @@ export function normalizeRuntimesPermitidos(raw: unknown, ownType: AgentType): A
   return result
 }
 
+/**
+ * Lord: backfill de `exigeConfirmacaoDeGasto`. Só um `false` explícito no
+ * arquivo desliga o portão daquela aba; ausência, `undefined` ou lixo viram
+ * `true`.
+ *
+ * A preferência global antiga (`externalSpawnAutoRun`) NÃO entra nesta conta de
+ * propósito, mesmo estando ligada no perfil: ela desligava o portão de todos os
+ * terminais de uma vez, inclusive os esquecidos, e é exatamente o defeito que o
+ * campo por aba corrige. Herdá-la aqui transformaria a migração em degradação
+ * silenciosa de segurança — quem quiser abrir mão do portão faz isso por
+ * terminal, na criação, depois de atualizar.
+ */
+export function normalizeExigeConfirmacaoDeGasto(raw: unknown): boolean {
+  return raw !== false
+}
+
 // Lord F3: Normaliza capability/origem/IDs sem carregar prompt efêmero de arquivos antigos.
 export function normalizeOrchestrationProjects(projects: readonly any[]): Project[] {
   return projects.map((project) => ({
@@ -148,6 +165,9 @@ export function normalizeOrchestrationProjects(projects: readonly any[]): Projec
           orchestrationMode: tab.orchestrationMode === 'team' ? 'team' : 'solo',
           // Lord ADR-0013 D2: backfill — aba pré-existente recebe só o próprio tipo.
           runtimesPermitidos: normalizeRuntimesPermitidos(tab.runtimesPermitidos, tab.type),
+          // Lord: backfill — aba pré-existente nasce pedindo confirmação de gasto,
+          // independente do `externalSpawnAutoRun` gravado no perfil.
+          exigeConfirmacaoDeGasto: normalizeExigeConfirmacaoDeGasto(tab.exigeConfirmacaoDeGasto),
         }
       }),
     })),

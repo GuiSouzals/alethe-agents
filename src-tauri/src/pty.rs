@@ -311,6 +311,22 @@ fn runtimes_permitidos_env_value(runtimes: Option<Vec<String>>) -> String {
     runtimes.unwrap_or_default().join(",")
 }
 
+// Lord: valor de LORD_SPAWN_DISCOVERY. Pura pelo mesmo motivo da de cima — a
+// resolução do caminho precisa de `AppHandle`
+// (`crate::agent_events::listener_discovery_path`), então o invólucro fica fino
+// e a decisão testável mora aqui.
+//
+// `None` significa "NÃO defina a env var": perfil não resolvido, ou caminho
+// vazio. Diferente de LORD_RUNTIMES_PERMITIDOS, aqui string vazia não é um
+// valor legítimo (conjunto vazio é um conjunto; caminho vazio não é um
+// caminho), e chutar um caminho plausível é proibido. Ausência da env var é o
+// que a ponte já documenta como "sem canal de despacho"
+// (`src/lib/spawnBridge.ts`, item 1).
+fn spawn_discovery_env_value(resolved: Option<PathBuf>) -> Option<String> {
+    let value = resolved?.to_string_lossy().trim().to_string();
+    (!value.is_empty()).then_some(value)
+}
+
 #[tauri::command]
 pub async fn spawn_pty(
     app: AppHandle,
@@ -466,6 +482,31 @@ pub async fn spawn_pty(
             "LORD_RUNTIMES_PERMITIDOS",
             runtimes_permitidos_env_value(runtimes_permitidos),
         );
+        // Lord: onde achar endpoint e token do `POST /spawn`. Mesmo lugar e
+        // mesma ordem dos três acima — DEPOIS do `extra_env`, para que nenhum
+        // chamador do frontend sobrescreva a proveniência por acidente. E, igual
+        // aos três, NÃO é fronteira de segurança: quem já tem o terminal pode
+        // forjar a env var; a fronteira de verdade é a recusa server-side em
+        // `agent_events.rs`.
+        //
+        // Vai o CAMINHO, não o token: o token é gerado em memória e ROTACIONA a
+        // cada inicialização do app (`agent_events::init_token`), então token
+        // injetado na env nasce condenado a ficar velho — e espalharia segredo
+        // por todo terminal. O caminho é estável; o processo lê o arquivo na
+        // hora do despacho e sempre pega o token corrente.
+        //
+        // Caminho não resolvido = env var NÃO definida (nunca um chute). O
+        // consumidor trata ausência como DESCONHECIDO e não despacha.
+        if let Some(discovery_path) =
+            spawn_discovery_env_value(crate::agent_events::listener_discovery_path(&app).ok())
+        {
+            command.env("LORD_SPAWN_DISCOVERY", discovery_path);
+        } else {
+            eprintln!(
+                "[pty] LORD_SPAWN_DISCOVERY não definida: caminho do arquivo de \
+                 descoberta do perfil ativo não resolvido"
+            );
+        }
         let resolve_ms = resolve_started.elapsed().as_millis();
         let builder_ms = spawn_started.elapsed().as_millis();
         let effective_path_preview = command
@@ -1980,6 +2021,30 @@ mod tests {
     #[test]
     fn a_missing_set_also_becomes_an_empty_string() {
         assert_eq!(runtimes_permitidos_env_value(None), "");
+    }
+
+    // Lord: oráculos do valor injetado em LORD_SPAWN_DISCOVERY. O que vai na env
+    // é o CAMINHO do arquivo de descoberta (o token rotaciona a cada
+    // inicialização do app, o caminho não), e
+    // ausência de caminho resolvido nunca vira chute.
+    #[test]
+    fn spawn_discovery_env_carries_the_resolved_discovery_path() {
+        let path = PathBuf::from(r"C:\dados\profiles\default\lord-agent-listener.json");
+        assert_eq!(
+            spawn_discovery_env_value(Some(path.clone())),
+            Some(path.to_string_lossy().to_string())
+        );
+    }
+
+    #[test]
+    fn an_unresolved_profile_leaves_the_var_undefined_instead_of_guessing_a_path() {
+        assert_eq!(spawn_discovery_env_value(None), None);
+    }
+
+    #[test]
+    fn an_empty_path_counts_as_absent_not_as_a_valid_path() {
+        assert_eq!(spawn_discovery_env_value(Some(PathBuf::new())), None);
+        assert_eq!(spawn_discovery_env_value(Some(PathBuf::from("   "))), None);
     }
 
     #[test]

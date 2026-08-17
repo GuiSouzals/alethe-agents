@@ -1,4 +1,4 @@
-import { CircleCheck, Folder, Info, Zap } from 'lucide-react'
+import { CircleCheck, Folder, Info, ShieldCheck, Zap } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { useUiStore } from '../../stores/uiStore'
@@ -7,6 +7,7 @@ import { getProjectDefaultCwd, useProjectsStore } from '../../stores/projectsSto
 import { pickDirectory } from '../../lib/dialog'
 import { AGENT_TYPE_LABELS, ALL_AGENT_TYPES, UNRESTRICTED_FLAG, type AgentRuntimeProfile, type AgentType } from '../../lib/types'
 import { AgentIcon } from '../icons/AgentIcons'
+import { buildSpawnBridgeArgs } from '../../lib/spawnBridge'
 import { useT } from '../../lib/i18n'
 import { Modal } from './Modal'
 import controls from './controls.module.css'
@@ -44,6 +45,11 @@ export function NewTerminalModal() {
   // Reseta quando o tipo do terminal muda (trocar de Claude pra Codex, por
   // exemplo, não deveria carregar uma seleção pensada pro tipo anterior).
   const [runtimesPermitidos, setRuntimesPermitidos] = useState<AgentType[]>([type])
+  // Lord: portão de gasto por terminal, decidido aqui junto do alcance de
+  // despacho porque é o mesmo assunto. Nasce LIGADO — desligar é escolha
+  // explícita e vale só para este terminal, nunca para todos como fazia a
+  // preferência global `externalSpawnAutoRun`.
+  const [exigeConfirmacaoDeGasto, setExigeConfirmacaoDeGasto] = useState(true)
 
   const visibleAgents = AGENTS.filter((a) => enabled[a.type])
   const defaultType =
@@ -77,6 +83,9 @@ export function NewTerminalModal() {
     setCwd(inheritedCwd)
     setType(defaultType)
     setRuntimesPermitidos([defaultType])
+    // Lord: cada abertura do modal volta ao portão ligado — a escolha de um
+    // terminal anterior não vaza para o próximo.
+    setExigeConfirmacaoDeGasto(true)
     // Lord F1: inclui cursor via ALL_AGENT_TYPES.
     setUnrestricted(
       Object.fromEntries(
@@ -104,6 +113,7 @@ export function NewTerminalModal() {
     setRuntimeProfile('lean')
     setCwd('')
     setRuntimesPermitidos([defaultType])
+    setExigeConfirmacaoDeGasto(true)
     setUnrestricted({
       shell: false,
       claude: false,
@@ -121,11 +131,26 @@ export function NewTerminalModal() {
     const finalName = selectedAgent.label
     const finalCwd = cwd.trim() || inheritedCwd
     const flag = UNRESTRICTED_FLAG[type]
-    const extraArgs = unrestricted[type] && flag ? [flag] : undefined
+    // Lord: a flag de modo irrestrito e a ponte de despacho são independentes —
+    // compõem, não competem. Marcar 2+ runtimes não pode apagar o irrestrito.
+    const composedArgs = [
+      ...(unrestricted[type] && flag ? [flag] : []),
+      ...buildSpawnBridgeArgs(type, runtimesPermitidos),
+    ]
+    const extraArgs = composedArgs.length > 0 ? composedArgs : undefined
     await createAgentTerminal(context.projectId, {
       name: finalName,
       cwd: finalCwd,
-      firstTab: { type, cwd: finalCwd, extraArgs, runtimeProfile, runtimesPermitidos },
+      firstTab: {
+        type,
+        cwd: finalCwd,
+        extraArgs,
+        runtimeProfile,
+        runtimesPermitidos,
+        // Lord: o portão de gasto viaja junto do alcance — as duas escolhas da
+        // seção 3 vão gravadas na aba, não numa preferência global.
+        exigeConfirmacaoDeGasto,
+      },
     })
     reset()
     closeModal()
@@ -282,6 +307,35 @@ export function NewTerminalModal() {
         {runtimesPermitidos.length === 0 ? (
           <p className={styles.scopeWarning}>{t('term.stepScopeEmptyWarning')}</p>
         ) : null}
+        {/* Lord: marcar o segundo runtime deixa de ser só autorização e passa a
+            injetar a instrução de despacho. O aviso existe para o usuário saber
+            que mudou de comportamento, não só de permissão. */}
+        {runtimesPermitidos.length > 1 ? (
+          <p className={styles.scopeBridgeNote}>{t('term.stepScopeBridge')}</p>
+        ) : null}
+        {/* Lord: portão de confirmação de gasto DESTE terminal. Mora nesta seção
+            porque decide a mesma coisa que os chips acima — o que o terminal pode
+            fazer com o dinheiro do dono. Mesmo componente visual do toggle de
+            modo irrestrito, sem inventar controle novo. */}
+        <button
+          type="button"
+          className={`${styles.permissionToggle} ${exigeConfirmacaoDeGasto ? styles.permissionToggleActive : ''}`}
+          onClick={() => setExigeConfirmacaoDeGasto((value) => !value)}
+          aria-pressed={exigeConfirmacaoDeGasto}
+        >
+          <span className={styles.permissionToggleIcon}>
+            <ShieldCheck size={17} />
+          </span>
+          <span className={styles.permissionToggleCopy}>
+            <span className={styles.permissionToggleTitle}>{t('term.stepScopeConfirm')}</span>
+            <span className={styles.permissionToggleDescription}>
+              {t('term.stepScopeConfirmHint')}
+            </span>
+          </span>
+          <span className={styles.permissionToggleState}>
+            {exigeConfirmacaoDeGasto ? t('term.unrestrictedOn') : t('term.unrestrictedOff')}
+          </span>
+        </button>
       </section>
 
       <div className={styles.autoNameHint}>

@@ -33,7 +33,7 @@ export function isPaidSpawnProvider(provider: string): provider is PaidSpawnProv
  */
 export type SpawnConfirmationTab = Pick<
   SubTab,
-  'type' | 'orchestrationRequestId' | 'automatedSpawn'
+  'type' | 'orchestrationRequestId' | 'automatedSpawn' | 'exigeConfirmacaoDeGasto'
 >
 
 /**
@@ -44,19 +44,25 @@ export type SpawnConfirmationTab = Pick<
  *    externa (`orchestrationRequestId` presente e não vazio) OU de automação
  *    interna (`automatedSpawn === true`);
  * 2. o provider é pago (`PAID_SPAWN_PROVIDERS`);
- * 3. `externalSpawnAutoRun` está desligado.
+ * 3. a própria aba pede confirmação (`exigeConfirmacaoDeGasto`), escolha feita
+ *    no modal de novo terminal junto do alcance de despacho.
+ *
+ * A condição 3 era a preferência GLOBAL `externalSpawnAutoRun`. Trocada pelo
+ * campo da aba porque desligar o portão para rodar uma cadeia automática
+ * desligava também o portão de todo terminal esquecido — e a decisão irmã
+ * (`runtimesPermitidos`) já é por terminal. Só um `false` explícito na aba
+ * dispensa o portão; ausência cai no lado seguro.
  *
  * Não lê store, não escreve no PTY e não decide o que fazer depois — só responde
  * se o portão se aplica.
  */
 export function requiresSpawnConfirmation(
   tab: SpawnConfirmationTab | null | undefined,
-  externalSpawnAutoRun: boolean,
 ): boolean {
   if (!tab) return false
   const externalRequestId = tab.orchestrationRequestId?.trim()
   const dispatchedByOrder = Boolean(externalRequestId) || tab.automatedSpawn === true
   if (!dispatchedByOrder) return false
   if (!isPaidSpawnProvider(tab.type)) return false
-  return externalSpawnAutoRun !== true
+  return tab.exigeConfirmacaoDeGasto !== false
 }

@@ -74,6 +74,8 @@ export function makeDefaultTerminal(args: {
     automatedSpawn?: boolean
     /** Lord ADR-0013 D2: default restritivo — omitido vira só o próprio tipo. */
     runtimesPermitidos?: AgentType[]
+    /** Lord: omitido vira `true` — quem não disse nada pede confirmação. */
+    exigeConfirmacaoDeGasto?: boolean
     /** Lord ADR-0014 D3: ver `SubTab.transcriptCapture`. */
     transcriptCapture?: { demandaDir: string; agente: string; assunto: string }
   }
@@ -114,6 +116,11 @@ export function makeDefaultTerminal(args: {
         // Lord ADR-0013 D2: default restritivo — só o runtime da própria aba.
         // Conjunto vazio explícito (`[]`) é respeitado, nunca substituído.
         runtimesPermitidos: args.firstTab.runtimesPermitidos ?? [args.firstTab.type],
+        // Lord: portão de gasto ligado por omissão. Todo caminho que cria aba
+        // sem opinar (ordem externa `/spawn`, scheduler, atalhos internos) cai
+        // aqui e nasce pedindo confirmação; só quem passa `false` de propósito
+        // — o modal de novo terminal — abre mão do portão.
+        exigeConfirmacaoDeGasto: args.firstTab.exigeConfirmacaoDeGasto ?? true,
         transcriptCapture: args.firstTab.transcriptCapture,
       },
     ],

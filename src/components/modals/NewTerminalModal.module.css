@@ -216,6 +216,21 @@
   font-size: 11px;
 }
 
+/* Lord: aviso de que 2+ runtimes marcados viram instrução de despacho, não só
+   autorização. Informativo, não erro — por isso destaque de acento, não de
+   status offline como o .scopeWarning acima. */
+.scopeBridgeNote {
+  margin: 9px 0 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--fg-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .folderRow {
   min-height: 40px;
   display: flex;

@@ -83,6 +83,14 @@ export type OrchestrationRun = {
   liveOutput: OrchestrationLiveOutput
   /** Lord: ver `OrchestrationEvent.scopeNote` — mesma semântica, persistida no run. */
   scopeNote?: string
+  /**
+   * Lord: `eventId` de todo evento que formou este run, em ordem de aplicação.
+   * Existe só para a poda: quando o teto de retenção descarta o run, estas são
+   * exatamente as chaves que precisam sair de `seenEventIds`, senão o mapa de
+   * dedupe continuaria crescendo sem fim e a poda seria pela metade. Opcional
+   * porque fixtures montam run à mão; o reducer sempre preenche.
+   */
+  eventIds?: string[]
 }
 
 // Lord: fonte única do rótulo de cada estado. Havia uma cópia local no componente de
@@ -158,6 +166,44 @@ export function canApplyOrchestrationTransition(
   return ORCHESTRATION_TRANSITIONS[current].includes(next)
 }
 
+// Lord: estado terminal é o que não tem nenhuma transição de saída na tabela
+// acima. Derivar daqui em vez de repetir a lista à mão evita que um estado novo
+// em `ORCHESTRATION_TRANSITIONS` fique de fora sem ninguém perceber.
+// ADR-0008: "encerrado" descreve o PROCESSO ter terminado, nunca aprovação.
+export function isOrchestrationRunFinished(status: OrchestrationEventType): boolean {
+  return ORCHESTRATION_TRANSITIONS[status].length === 0
+}
+
+/**
+ * Lord: teto de retenção da projeção. O reducer só fazia append: `runOrder`,
+ * `runsById` (com `finalTranscript` inteiro dentro) e `seenEventIds` cresciam
+ * enquanto o app estivesse aberto. O teto é alto de propósito — quem consulta
+ * histórico usa a aba "Agentes" — e existe para o crescimento ser limitado, não
+ * para esconder run recente.
+ */
+export const MAX_ORCHESTRATION_RUNS = 200
+
+// Lord: descarte FIFO da run mais antiga quando passa do teto. Leva junto as
+// chaves de dedupe daquela run, porque poda que esquece `seenEventIds` continua
+// vazando memória. Pura: monta cópias e nunca muta a projeção recebida.
+function pruneOrchestrationProjection(
+  projection: OrchestrationProjection,
+): OrchestrationProjection {
+  if (projection.runOrder.length <= MAX_ORCHESTRATION_RUNS) return projection
+
+  const runOrder = [...projection.runOrder]
+  const runsById = { ...projection.runsById }
+  const seenEventIds = { ...projection.seenEventIds }
+  while (runOrder.length > MAX_ORCHESTRATION_RUNS) {
+    const oldestRunId = runOrder.shift()
+    if (oldestRunId === undefined) break
+    const dropped = runsById[oldestRunId]
+    delete runsById[oldestRunId]
+    for (const eventId of dropped?.eventIds ?? []) delete seenEventIds[eventId]
+  }
+  return { runsById, runOrder, seenEventIds }
+}
+
 function hasIdentityConflict(run: OrchestrationRun, event: OrchestrationEvent): boolean {
   return (
     run.requestId !== event.requestId ||
@@ -209,6 +255,9 @@ export function reduceOrchestrationProjection(
     internalAgentId: base.internalAgentId ?? event.internalAgentId,
     liveOutput: event.liveOutput,
     scopeNote: base.scopeNote ?? event.scopeNote,
+    // Lord: rastro dos eventos desta run, consumido só pela poda (ver
+    // `pruneOrchestrationProjection`).
+    eventIds: [...(current?.eventIds ?? []), event.eventId],
   }
 
   if (event.type === 'tool_started') {
@@ -224,11 +273,11 @@ export function reduceOrchestrationProjection(
     next.failureReason = event.failureReason
   }
 
-  return {
+  return pruneOrchestrationProjection({
     runsById: { ...projection.runsById, [event.runId]: next },
     runOrder: current ? projection.runOrder : [...projection.runOrder, event.runId],
     seenEventIds: { ...projection.seenEventIds, [event.eventId]: true },
-  }
+  })
 }
 
 // Lord F3: A ligação persistida é mínima; todo o restante do run permanece efêmero.

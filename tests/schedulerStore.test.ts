@@ -20,18 +20,28 @@ describe('buildSchedulerTaskFirstTab', () => {
     const firstTab = buildSchedulerTaskFirstTab('codex', 'Task qualquer')
 
     expect(firstTab.automatedSpawn).toBe(true)
-    expect(requiresSpawnConfirmation(firstTab, false)).toBe(true)
+    expect(requiresSpawnConfirmation(firstTab)).toBe(true)
   })
 
   it('não força confirmação quando o provider não é pago (shell)', () => {
     const firstTab = buildSchedulerTaskFirstTab('shell', 'Task qualquer')
 
-    expect(requiresSpawnConfirmation(firstTab, false)).toBe(false)
+    expect(requiresSpawnConfirmation(firstTab)).toBe(false)
   })
 
-  it('respeita externalSpawnAutoRun ligado', () => {
+  // Lord: o portão deixou de ser a preferência global `externalSpawnAutoRun` e
+  // passou a ser campo da aba. O agendador declara o campo LIGADO em vez de
+  // depender da ausência dele — trave isso, porque é o que protege o gasto de um
+  // tick que roda sem ninguém olhando.
+  it('declara o portão de gasto ligado, sem depender de default alheio', () => {
     const firstTab = buildSchedulerTaskFirstTab('claude', 'Task qualquer')
 
-    expect(requiresSpawnConfirmation(firstTab, true)).toBe(false)
+    expect(firstTab.exigeConfirmacaoDeGasto).toBe(true)
+  })
+
+  it('só dispensa o portão com um false explícito na aba', () => {
+    const firstTab = buildSchedulerTaskFirstTab('claude', 'Task qualquer')
+
+    expect(requiresSpawnConfirmation({ ...firstTab, exigeConfirmacaoDeGasto: false })).toBe(false)
   })
 })

@@ -31,7 +31,11 @@ import {
   type AgentType,
 } from '../../lib/types'
 import { requiresSpawnConfirmation } from '../../lib/spawnConfirmation'
-import { findRunForSubTab, type OrchestrationEvent } from '../../lib/orchestration'
+import {
+  findRunForSubTab,
+  isOrchestrationRunFinished,
+  type OrchestrationEvent,
+} from '../../lib/orchestration'
 import { getPtyCwd, openInVscode, restartPty, snapshotCodexSessions } from '../../lib/tauri'
 import { AgentIcon, VSCodeIcon } from '../icons/AgentIcons'
 import { SubTabsLane } from '../SubTabsLane'
@@ -202,12 +206,12 @@ export const TerminalPane = memo(function TerminalPane({
     setSpawnGateDecision(null)
   }, [activeTabId])
 
-  const externalSpawnAutoRun = useProjectsStore(
-    (s) => s.preferences.externalSpawnAutoRun ?? false,
-  )
   const pendingSpawnPrompt = activeTab?.initialInput?.trim() ?? ''
+  // Lord: o portão é decidido pela própria aba (`exigeConfirmacaoDeGasto`), não
+  // mais pela preferência global `externalSpawnAutoRun` — que continua existindo
+  // no perfil mas não manda mais aqui.
   const needsSpawnConfirmation =
-    pendingSpawnPrompt.length > 0 && requiresSpawnConfirmation(activeTab, externalSpawnAutoRun)
+    pendingSpawnPrompt.length > 0 && requiresSpawnConfirmation(activeTab)
   const showSpawnGate = needsSpawnConfirmation && spawnGateDecision === null
   const initialInputGate: 'auto' | 'hold' | 'send' | 'discard' =
     spawnGateDecision ?? (needsSpawnConfirmation ? 'hold' : 'auto')
@@ -220,18 +224,23 @@ export const TerminalPane = memo(function TerminalPane({
     () => findRunForSubTab({ runsById: orchestrationRunsById }, activeTab),
     [activeTab, orchestrationRunsById],
   )
-  const internalRuns = useMemo(
-    () =>
-      orchestrationRunOrder
-        .map((runId) => orchestrationRunsById[runId])
-        .filter(
-          (run): run is NonNullable<typeof run> =>
-            Boolean(run) &&
-            run.source === 'internal_subagent' &&
-            run.parentTerminalId === terminal.id,
-        ),
-    [orchestrationRunOrder, orchestrationRunsById, terminal.id],
-  )
+  // Lord: a faixa de atividade só mostra cartão de subagente ainda em curso. Run
+  // com o processo encerrado virava mais um <article> com <pre> de transcript, e
+  // com 14 subagentes a faixa espremia o terminal a zero. O que sai daqui é a
+  // lista viva mais a CONTAGEM das encerradas — a lista completa continua na aba
+  // "Agentes" da barra direita, que tem rolagem própria.
+  const { internalLiveRuns, internalFinishedCount } = useMemo(() => {
+    const runs = orchestrationRunOrder
+      .map((runId) => orchestrationRunsById[runId])
+      .filter(
+        (run): run is NonNullable<typeof run> =>
+          Boolean(run) &&
+          run.source === 'internal_subagent' &&
+          run.parentTerminalId === terminal.id,
+      )
+    const live = runs.filter((run) => !isOrchestrationRunFinished(run.status))
+    return { internalLiveRuns: live, internalFinishedCount: runs.length - live.length }
+  }, [orchestrationRunOrder, orchestrationRunsById, terminal.id])
 
   const effectiveLaneVisible = terminal.tabs.length > 1 ? true : terminal.laneVisible === true
 
@@ -349,6 +358,14 @@ export const TerminalPane = memo(function TerminalPane({
     setActiveTerminal(targetProject.id, terminalId)
     requestPaneFocus(terminalId)
     useUiStore.getState().setActiveView('workspace')
+  }
+
+  // Lord: a linha de encerrados da faixa manda para onde a lista completa vive.
+  // Reusa a ação que já existe (`showAgentsSidebar`) e garante a barra aberta,
+  // igual ao caminho do viewer de Markdown — sem API nova e sem mexer no layout.
+  const openAgentsSidebar = () => {
+    useUiStore.getState().showAgentsSidebar()
+    useProjectsStore.getState().setPreferences({ rightSidebarVisible: true })
   }
 
   const onToggleLane = () => {
@@ -538,9 +555,11 @@ export const TerminalPane = memo(function TerminalPane({
             <OrchestrationActivity
               mode={activeTab.orchestrationMode}
               run={orchestrationRun}
-              internalRuns={internalRuns}
+              internalRuns={internalLiveRuns}
+              finishedCount={internalFinishedCount}
               currentTerminalId={terminal.id}
               onFocusTerminal={focusOrchestrationTerminal}
+              onOpenFinishedList={openAgentsSidebar}
             />
           ) : null}
           {activeTab && showSpawnGate ? (
