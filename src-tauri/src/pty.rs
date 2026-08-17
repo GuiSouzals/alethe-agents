@@ -2040,7 +2040,10 @@ mod tests {
     fn sanitize_transcript_segment_replaces_unsafe_characters_and_collapses_dashes() {
         assert_eq!(sanitize_transcript_segment("Claude Code"), "Claude-Code");
         assert_eq!(sanitize_transcript_segment("a//b\\c"), "a-b-c");
-        assert_eq!(sanitize_transcript_segment("já_com-underscore"), "j-com_underscore");
+        // `á` nao e ASCII alfanumerico, entao vira `-`; `_` e `-` sao preservados.
+        // A expectativa anterior ("j-com_underscore") trocava o underscore de lugar
+        // e reprovou no CI — o teste estava errado, a funcao nao.
+        assert_eq!(sanitize_transcript_segment("já_com-underscore"), "j-_com-underscore");
     }
 
     #[test]
