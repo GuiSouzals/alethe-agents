@@ -35,6 +35,14 @@ export type AgentSpawnPayloadV1 = {
    * precisa dizer que o escopo não foi conferido, nunca aparentar que foi.
    */
   scopeNote?: string
+  /**
+   * Lord ADR-0014 D3: pedido explícito de captura automática de transcript
+   * pra a aba que este spawn cria (ver `SubTab.transcriptCapture`). Ausente
+   * = sem captura — o chassi nunca infere sozinho que um despacho "é de uma
+   * fatia"; só grava quando o orquestrador (que já sabe o slug da demanda)
+   * pede.
+   */
+  transcriptCapture?: { demandaDir: string; agente: string; assunto: string }
 }
 
 export type SpawnProject = Pick<Project, 'id' | 'defaultCwd'>
@@ -52,6 +60,7 @@ export type SpawnResolution =
       origin: string
       parentTerminalId?: string
       scopeNote?: string
+      transcriptCapture?: { demandaDir: string; agente: string; assunto: string }
     }
   | {
       status: 'invalid'
@@ -120,6 +129,7 @@ export function resolveSpawnTarget(
       origin: payload.origin,
       parentTerminalId: payload.parentTerminalId,
       scopeNote: payload.scopeNote,
+      transcriptCapture: payload.transcriptCapture,
     }
   }
 
@@ -140,5 +150,6 @@ export function resolveSpawnTarget(
     origin: payload.origin,
     parentTerminalId: payload.parentTerminalId,
     scopeNote: payload.scopeNote,
+    transcriptCapture: payload.transcriptCapture,
   }
 }

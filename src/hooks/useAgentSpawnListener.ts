@@ -54,6 +54,8 @@ export function buildSpawnTerminalArgs(decision: MatchedSpawn) {
       orchestrationRequestId: decision.requestId,
       orchestrationJobId: decision.jobId,
       orchestrationParentTerminalId: decision.parentTerminalId,
+      // Lord ADR-0014 D3: pedido de captura, quando o /spawn o incluiu.
+      transcriptCapture: decision.transcriptCapture,
     },
   }
 }

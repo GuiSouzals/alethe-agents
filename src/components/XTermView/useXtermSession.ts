@@ -133,6 +133,13 @@ export function useXtermSession(params: {
   /** Lord ADR-0013 D3 camada 1: runtimes permitidos (D2) desta aba, para o
    * backend injetar `LORD_RUNTIMES_PERMITIDOS` no ambiente do PTY. */
   runtimesPermitidos?: string[]
+  /**
+   * Lord ADR-0014 D3: pedido de captura automática de transcript, quando
+   * esta aba nasceu de uma fatia despachada (ver `SubTab.transcriptCapture`).
+   * Só é lido no SPAWN inicial — um restart desta mesma aba não retoma a
+   * captura nesta rodada (gap declarado, ver LORD-CHASSI.md).
+   */
+  transcriptCapture?: { demandaDir: string; agente: string; assunto: string }
   graphifyRepo?: string | null
   /** Gate de Conclusão de Planejamento GSD: projeto com o monitoramento
    * ligado. Presente + `command === 'opencode'`: instala automaticamente o
@@ -203,6 +210,7 @@ export function useXtermSession(params: {
     sessionId,
     env,
     runtimesPermitidos,
+    transcriptCapture,
     graphifyRepo,
     gsdWatcherEnabled,
     trustSessionId,
@@ -1175,6 +1183,7 @@ export function useXtermSession(params: {
             launcherOverride,
             env: preparedRuntime.env,
             runtimesPermitidos,
+            transcriptCapture,
           })
         } finally {
           releaseSpawnSlot()

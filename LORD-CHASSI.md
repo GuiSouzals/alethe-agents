@@ -109,6 +109,7 @@ com `invalid_request`. Não há tradução do payload antigo.
 | `project_id` | string | condicional | idem |
 | `name` | string | não | nome da aba; sem ele a UI usa o rótulo do provider |
 | `parent_terminal_id` | string | não | vínculo pai/filho para a UI focar sem inferir |
+| `transcript_capture` | objeto `{demandaDir, agente, assunto}` | não | pede captura automática de transcript (ADR-0014 D3, ver 3.1a) |
 
 **`reason` possíveis.** Rejeição sempre é JSON e sempre carrega `job_id` rastreável
 (`src-tauri/src/spawn_state.rs:30-47`).
@@ -181,6 +182,63 @@ aba anterior à D2 sem o campo). O frontend traduz o código por i18n e mostra n
 > `agent_events.rs:250-259` (Rust) e `SPAWN_PROVIDERS` em
 > `src/hooks/resolveSpawnTarget.ts:7-13` (TypeScript). Mudar só uma faz o `/spawn`
 > responder e o frontend rejeitar com `invalid_provider`.
+
+#### 3.1a Captura automática de transcript (ADR-0014 D3)
+
+O chassi já é dono do PTY (é quem lê os bytes crus do processo filho). D3 pede que ele grave
+essa saída automaticamente em arquivo, pra o orquestrador referenciar como evidência —
+substituindo a disciplina manual do piloto 1 (`conversas/`, frágil: "sem o log bruto
+capturado na hora, não existe verbatim").
+
+**Como pedir.** `/spawn` aceita um campo opcional `transcriptCapture: { demandaDir, agente,
+assunto }` no corpo (`agent_events.rs::SpawnRequestV1.transcript_capture`, tipo
+`crate::pty::TranscriptCaptureArgs`). Ausente = sem captura. **O chassi nunca infere sozinho
+que um PTY "é de uma fatia"** — decidir isso é julgamento (ADR-0003) e cabe a quem já leu
+`demanda.md` e sabe o slug: o orquestrador que chama `/spawn`. O mesmo campo existe em
+`spawnPty`/`spawn_pty` (`lib/tauri/pty.ts`, `pty.rs`) pra qualquer chamador direto do comando
+Tauri, não só o caminho HTTP.
+
+**Onde grava e como numera** (previsível, por design):
+
+```
+<demandaDir>/conversas/NN-<agente>-<assunto>-saida-bruta.txt
+```
+
+`NN` (mínimo 2 dígitos) é o maior número já existente em `conversas/` mais um — mecânico,
+nunca preenche lacuna, não interpreta conteúdo de arquivo nenhum (`next_transcript_sequence`,
+`pty.rs`). `agente`/`assunto` passam por `sanitize_transcript_segment` (troca qualquer
+caractere fora de `[a-zA-Z0-9_-]` por `-`, colapsa repetições) — sanitização de nome de
+arquivo, não julgamento sobre o conteúdo.
+
+**Por que não reusar o `.bin` do scrollback como arquivo de evidência** (a pergunta que o
+pedido de manutenção faz explicitamente): o scrollback (`ScrollbackBuffer`,
+`SCROLLBACK_CAP_BYTES` = 4 MiB) é um **anel** que preserva a CAUDA mais recente —
+`load_scrollback`/`push_scrollback` descartam o INÍCIO do stream ao passar do cap, porque
+ele serve resync de tela (o que importa é o que está na tela AGORA). Evidência de conversa
+é o oposto: o que importa é o COMEÇO (o que foi pedido), e truncar por trás destruiria a
+garantia de "verbatim" que D3 pede. **Reusar o arquivo teria semântica errada.** O que É
+reusado é o PONTO de interceptação: o mesmo lote de bytes que já alimenta `push_scrollback`
+no reader loop (`pty.rs`, dentro do laço de leitura do PTY) alimenta também
+`TranscriptCaptureHandle::append`, um sink independente com política própria.
+
+**Rotação/limite (nunca sem teto).** `TRANSCRIPT_CAPTURE_CAP_BYTES` = 20 MiB por arquivo —
+maior que o scrollback de propósito (aqui o objetivo é registrar do início ao fim, não só a
+tela atual), mas ainda finito. Ao atingir o teto: para de escrever, anexa UMA linha de aviso
+(“captura de transcript truncada: limite de 20 MiB atingido […]”) e libera o arquivo — nunca
+trunca em silêncio, nunca sobrescreve o que já foi gravado (diferente do scrollback, que
+mantém a cauda; aqui mantém-se o COMEÇO e para).
+
+**Falha ao abrir o arquivo** (permissão, disco cheio, `demandaDir` inválido) nunca bloqueia o
+spawn do PTY: a captura fica desligada só para aquela sessão, registrado em `stderr` do
+chassi. Falha de escrita no meio (`append`) é best-effort e silenciosa pelo mesmo motivo —
+nunca derruba o PTY por causa de um arquivo de evidência.
+
+**Gap declarado nesta rodada:** só o spawn INICIAL aceita `transcriptCapture` —
+`restart_pty` não retoma a captura (chama `spawn_pty` internamente sempre com
+`transcript_capture: None`). Um restart que precisar de captura ganha uma nova sequência
+(`NN` seguinte) só se o próximo spawn/criação de aba pedir de novo. Terminal aberto
+diretamente pelo usuário (fora de `/spawn`) também não recebe captura automática — por
+desenho (ver D5 do ADR-0013: terminal do usuário nunca é tratado como "fatia").
 
 **Obtenção do token continua interna ao app.** Ele vive só em memória e sai por dois
 caminhos: o comando Tauri `agent_hooks_token` (`src-tauri/src/agent_events.rs:133-136`,

@@ -646,6 +646,7 @@ export const TerminalPane = memo(function TerminalPane({
                     initialInputOrigin={activeTab.orchestrationOrigin}
                     runtimeProfile={activeTab.runtimeProfile}
                     runtimesPermitidos={activeTab.runtimesPermitidos}
+                    transcriptCapture={activeTab.transcriptCapture}
                     sessionId={activeTab.sessionId}
                     graphifyRepo={graphifyRepo}
                     gsdWatcherEnabled={gsdWatcherEnabled}

@@ -205,6 +205,8 @@ export type ProjectsState = ProjectsFile & {
         automatedSpawn?: boolean
         /** Lord ADR-0013 D2: default restritivo — omitido vira só o próprio tipo. */
         runtimesPermitidos?: AgentType[]
+        /** Lord ADR-0014 D3: ver `SubTab.transcriptCapture`. */
+        transcriptCapture?: { demandaDir: string; agente: string; assunto: string }
       }
       worktreeAgentId?: string
       gsdSyncViewer?: boolean
@@ -236,6 +238,8 @@ export type ProjectsState = ProjectsFile & {
         automatedSpawn?: boolean
         /** Lord ADR-0013 D2: default restritivo — omitido vira só o próprio tipo. */
         runtimesPermitidos?: AgentType[]
+        /** Lord ADR-0014 D3: ver `SubTab.transcriptCapture`. */
+        transcriptCapture?: { demandaDir: string; agente: string; assunto: string }
       }
     },
   ) => Promise<Terminal>

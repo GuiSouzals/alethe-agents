@@ -168,6 +168,10 @@ pub struct PtySession {
     pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub child: Arc<Mutex<Box<dyn portable_pty::Child + Send + Sync>>>,
     pub scrollback: Arc<Mutex<ScrollbackBuffer>>,
+    /// Lord ADR-0014 D3: captura de transcript desta sessão, quando o
+    /// chamador pediu (`TranscriptCaptureArgs`). `None` = sem captura (o
+    /// padrão) — nunca inferido pelo chassi sozinho, só por pedido explícito.
+    pub transcript: Option<Arc<TranscriptCaptureHandle>>,
     /// Sinaliza que o reader terminou de persistir a cauda final. Suspensão
     /// espera esta barreira antes de permitir que o mesmo id seja retomado.
     pub reader_done: Arc<(Mutex<Option<bool>>, Condvar)>,
@@ -330,6 +334,11 @@ pub async fn spawn_pty(
     // genérico) de propósito, pelo mesmo motivo dos outros dois: nenhum
     // chamador deveria conseguir confundir isto com env arbitrário do PTY.
     runtimes_permitidos: Option<Vec<String>>,
+    // Lord ADR-0014 D3: pedido explícito de captura automática de transcript
+    // pra esta sessão (ver `TranscriptCaptureHandle`). `None` = sem captura.
+    // Só o spawn inicial recebe este parâmetro — `restart_pty` não retoma a
+    // captura nesta rodada (gap declarado, ver LORD-CHASSI.md).
+    transcript_capture: Option<TranscriptCaptureArgs>,
 ) -> Result<SpawnPtyResponse, String> {
     // `openpty`/resolução do launcher/`spawn_command` são chamadas de SO de
     // verdade (ConPTY, criação de processo) — podem demorar bem mais que o
@@ -362,6 +371,28 @@ pub async fn spawn_pty(
         let scrollback = Arc::new(Mutex::new(ScrollbackBuffer::new(load_scrollback(
             &app, &id,
         )?)));
+        // Lord ADR-0014 D3: abre o sink de transcript ANTES do processo nascer,
+        // então nenhum byte da saída real fica de fora se o pedido veio junto
+        // do spawn. Falha ao abrir (permissão, disco, `demanda_dir` inválido)
+        // NUNCA bloqueia o spawn do PTY -- só desliga a captura desta sessão.
+        let transcript: Option<Arc<TranscriptCaptureHandle>> =
+            transcript_capture.and_then(|spec| {
+                let path = transcript_capture_path(&spec.demanda_dir, &spec.agente, &spec.assunto);
+                match TranscriptCaptureHandle::open(&path) {
+                    Ok(handle) => {
+                        eprintln!("[pty] captura de transcript ligada: {}", path.display());
+                        Some(Arc::new(handle))
+                    }
+                    Err(error) => {
+                        eprintln!(
+                            "[pty] falha ao abrir arquivo de transcript ({}): {error} -- \
+                             captura desligada pra esta sessão, spawn segue normal",
+                            path.display()
+                        );
+                        None
+                    }
+                }
+            });
         let teardown = Arc::new(AtomicU8::new(TEARDOWN_NORMAL));
         let pty_system = native_pty_system();
         let pair = pty_system
@@ -511,6 +542,9 @@ pub async fn spawn_pty(
         let scrollback_app = app.clone();
         let scrollback_id = id.clone();
         let thread_scrollback = Arc::clone(&scrollback);
+        // Lord ADR-0014 D3: mesmo padrão de clone do scrollback, pro reader
+        // loop poder alimentar os dois sinks sem mais nenhuma sincronização.
+        let thread_transcript = transcript.clone();
         let thread_teardown = Arc::clone(&teardown);
         let reader_done = Arc::new((Mutex::new(None), Condvar::new()));
         let thread_reader_done = Arc::clone(&reader_done);
@@ -693,6 +727,13 @@ pub async fn spawn_pty(
             // Scrollback recebe os bytes crus do lote (sempre corretos — só o
             // emit precisa de fronteira de caractere).
             let _ = push_scrollback(&scrollback_app, &scrollback_id, &thread_scrollback, &batch);
+            // Lord ADR-0014 D3: mesmo lote, segundo sink -- ver o comentário
+            // de "Captura automática de transcript" acima sobre por que isto
+            // não reusa o ARQUIVO do scrollback (semântica de truncamento
+            // incompatível), só o ponto de interceptação.
+            if let Some(transcript) = &thread_transcript {
+                transcript.append(&batch);
+            }
 
             // Emit PRIMEIRO o que é UTF-8 completo — user vê o echo na hora,
             // sem disk I/O no caminho da tecla. Caractere partido no limite do
@@ -828,6 +869,7 @@ pub async fn spawn_pty(
             writer,
             child,
             scrollback,
+            transcript,
             reader_done,
             teardown,
             command: requested_command,
@@ -929,6 +971,11 @@ pub async fn restart_pty(
         launcher_override,
         env,
         runtimes_permitidos,
+        // Lord ADR-0014 D3: restart não retoma a captura de transcript nesta
+        // rodada -- gap declarado (LORD-CHASSI.md). Um restart que precisar
+        // de captura hoje só a ganha se o próximo `/spawn`/criação de aba a
+        // pedir de novo (nova sequência, novo arquivo `NN`).
+        None,
     )
     .await
 }
@@ -1635,6 +1682,184 @@ pub fn cleanup_orphan_scrollback(app: &AppHandle) {
     }
 }
 
+// ---- Captura automática de transcript (ADR-0014 D3) ----
+//
+// O chassi já é dono do PTY (é quem lê os bytes crus do processo filho, ver o
+// reader loop acima). D3 pede que ele grave essa saída bruta em arquivo pra
+// uma fatia despachada, em vez de depender de disciplina manual do
+// orquestrador (frágil no piloto 1: "sem o log bruto capturado na hora, não
+// existe verbatim").
+//
+// **Por que não reusar o `.bin` do scrollback como o arquivo de evidência**
+// (a pergunta que o pedido de manutenção faz explicitamente): o scrollback é
+// um ANEL limitado a `SCROLLBACK_CAP_BYTES` (4 MiB) que preserva a CAUDA mais
+// recente (`load_scrollback`/`push_scrollback` acima descartam o INÍCIO do
+// stream quando excede o cap) — correto pro que ele serve (resync de tela: o
+// que importa é o que está na tela agora). Evidência de conversa é o
+// oposto: o que importa é o COMEÇO (o que foi pedido), e truncar por trás
+// destruiria justamente a garantia que D3 pede ("verbatim"). Reusar o
+// arquivo teria semântica errada; o que É reusado é o PONTO de interceptação
+// — o mesmo lote de bytes que já alimenta `push_scrollback` no reader loop,
+// uma segunda vez, pra um sink independente com política própria.
+//
+// Teto do arquivo de transcript: bem maior que o do scrollback porque aqui o
+// objetivo é registrar do início ao fim de uma fatia (evidência), não só
+// manter a tela atual. Ainda assim tem teto — (d) do pedido de manutenção é
+// explícito: nada de gravação sem limite. Ao alcançá-lo, para de escrever e
+// registra isso UMA vez no próprio arquivo (nunca trunca em silêncio).
+pub const TRANSCRIPT_CAPTURE_CAP_BYTES: u64 = 20 * 1024 * 1024; // 20 MiB
+
+// `&str` (não `b"..."`) de propósito: a mensagem usa acento, e byte string
+// literal só aceita ASCII -- `.as_bytes()` no ponto de uso converte pra UTF-8.
+const TRANSCRIPT_TRUNCATION_NOTICE: &str = "\n\n\
+[lord-chassi] captura de transcript truncada: limite de 20 MiB atingido. \
+A conversa real pode ter continuado além deste ponto -- este arquivo para de ser \
+evidência integral a partir daqui.\n";
+
+/// Parâmetros que o CHAMADOR (orquestrador, que já sabe o que é uma fatia e
+/// qual `demanda.md`/slug ela pertence) fornece ao pedir a captura. O chassi
+/// nunca decide sozinho que um PTY "é de uma fatia" — decidir isso seria
+/// julgamento (ADR-0003); aqui ele só recebe o pedido explícito e executa a
+/// mecânica (abrir arquivo, numerar, gravar bytes, respeitar o teto).
+// `Serialize` também: `agent_events.rs::SpawnEventV1` reencaminha o mesmo
+// pedido recebido em `/spawn` pro evento Tauri, sem reconstruir a struct.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TranscriptCaptureArgs {
+    /// Caminho absoluto de `.lord/demandas/<slug>/` (sem o `conversas/` final).
+    pub demanda_dir: String,
+    pub agente: String,
+    pub assunto: String,
+}
+
+/// Mecânico, não interpretativo: troca qualquer caractere fora de
+/// `[a-zA-Z0-9_-]` por `-` e colapsa repetições. Não julga o CONTEÚDO de
+/// `agente`/`assunto` (isso já foi decidido por quem chamou) — só garante um
+/// nome de arquivo válido em qualquer sistema de arquivos.
+fn sanitize_transcript_segment(input: &str) -> String {
+    let cleaned: String = input
+        .trim()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' })
+        .collect();
+    let collapsed = cleaned
+        .split('-')
+        .filter(|segment| !segment.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+    if collapsed.is_empty() {
+        "sem-nome".to_string()
+    } else {
+        collapsed
+    }
+}
+
+/// Escaneia `conversas_dir` por arquivos já numerados (`NN-...`) e devolve o
+/// próximo número — puramente mecânico (conta nomes de arquivo, não abre nem
+/// interpreta conteúdo nenhum). Nunca preenche lacunas: sempre o maior + 1,
+/// igual a como o piloto 1 numerou manualmente.
+fn next_transcript_sequence(conversas_dir: &Path) -> u32 {
+    let mut max_seen = 0u32;
+    if let Ok(entries) = fs::read_dir(conversas_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            let digits: String = name.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if let Ok(n) = digits.parse::<u32>() {
+                max_seen = max_seen.max(n);
+            }
+        }
+    }
+    max_seen + 1
+}
+
+/// Caminho previsível e documentado (LORD-CHASSI.md): sempre
+/// `<demanda_dir>/conversas/NN-<agente>-<assunto>-saida-bruta.txt`, `NN` com
+/// 2 dígitos mínimos (sem teto — a 100ª fatia ainda gera um nome válido).
+pub fn transcript_capture_path(demanda_dir: &str, agente: &str, assunto: &str) -> PathBuf {
+    let conversas_dir = Path::new(demanda_dir).join("conversas");
+    let sequence = next_transcript_sequence(&conversas_dir);
+    let agente = sanitize_transcript_segment(agente);
+    let assunto = sanitize_transcript_segment(assunto);
+    conversas_dir.join(format!("{sequence:02}-{agente}-{assunto}-saida-bruta.txt"))
+}
+
+/// Sink de captura de um PTY: append-only, bytes crus (nunca interpretados —
+/// ADR-0003), com teto próprio e independente do scrollback. Depois de
+/// atingir o teto vira no-op barato (o `Mutex` some, `capped` evita até
+/// tentar o lock de novo).
+pub struct TranscriptCaptureHandle {
+    file: Mutex<Option<fs::File>>,
+    written: AtomicU64,
+    capped: AtomicBool,
+    /// Injetável só pra teste escrever menos de 20 MiB pra exercitar o corte;
+    /// em produção é sempre `TRANSCRIPT_CAPTURE_CAP_BYTES` (ver `open`).
+    cap: u64,
+}
+
+impl TranscriptCaptureHandle {
+    /// Best-effort: se o arquivo não puder ser aberto (permissão, disco,
+    /// `demanda_dir` inválido), a captura fica desligada PARA ESTA SESSÃO —
+    /// nunca bloqueia o spawn do PTY em si. Quem pediu descobre pelo log.
+    fn open(path: &Path) -> Result<Self, String> {
+        Self::open_with_cap(path, TRANSCRIPT_CAPTURE_CAP_BYTES)
+    }
+
+    fn open_with_cap(path: &Path, cap: u64) -> Result<Self, String> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        let file = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            file: Mutex::new(Some(file)),
+            written: AtomicU64::new(0),
+            capped: AtomicBool::new(false),
+            cap,
+        })
+    }
+
+    /// Grava `bytes` sem interpretar (mecânica de chassi, não julgamento).
+    /// Nunca escreve além do teto: corta o que sobrar de orçamento, anexa o
+    /// aviso de truncamento uma única vez e fecha o arquivo — chamadas
+    /// seguintes retornam na hora, sem tentar lock nem I/O.
+    pub fn append(&self, bytes: &[u8]) {
+        if bytes.is_empty() || self.capped.load(Ordering::Relaxed) {
+            return;
+        }
+        let Ok(mut guard) = self.file.lock() else { return };
+        let Some(file) = guard.as_mut() else { return };
+
+        let already_written = self.written.load(Ordering::Relaxed);
+        let budget = self.cap.saturating_sub(already_written);
+        if budget == 0 {
+            self.capped.store(true, Ordering::Relaxed);
+            *guard = None;
+            return;
+        }
+
+        let to_write: &[u8] = if (bytes.len() as u64) > budget {
+            &bytes[..budget as usize]
+        } else {
+            bytes
+        };
+        if file.write_all(to_write).is_err() {
+            return;
+        }
+        let new_total = already_written + to_write.len() as u64;
+        self.written.store(new_total, Ordering::Relaxed);
+
+        if new_total >= self.cap {
+            let _ = file.write_all(TRANSCRIPT_TRUNCATION_NOTICE.as_bytes());
+            self.capped.store(true, Ordering::Relaxed);
+            *guard = None;
+        }
+    }
+}
+
 pub fn kill_all_sessions(sessions: &PtySessions) {
     let drained = sessions
         .lock()
@@ -1804,5 +2029,100 @@ mod tests {
         let mut carry = first[valid..].to_vec();
         carry.extend_from_slice(&full[2..]); // + 0xA9
         assert_eq!(valid_utf8_prefix_len(&carry), carry.len()); // "é" completo
+    }
+
+    // Lord ADR-0014 D3: oráculos da captura automática de transcript.
+    fn transcript_test_dir(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("lord-transcript-test-{label}-{}", nanoid::nanoid!()))
+    }
+
+    #[test]
+    fn sanitize_transcript_segment_replaces_unsafe_characters_and_collapses_dashes() {
+        assert_eq!(sanitize_transcript_segment("Claude Code"), "Claude-Code");
+        assert_eq!(sanitize_transcript_segment("a//b\\c"), "a-b-c");
+        assert_eq!(sanitize_transcript_segment("já_com-underscore"), "j-com_underscore");
+    }
+
+    #[test]
+    fn sanitize_transcript_segment_falls_back_to_a_placeholder_when_empty() {
+        assert_eq!(sanitize_transcript_segment(""), "sem-nome");
+        assert_eq!(sanitize_transcript_segment("   "), "sem-nome");
+        assert_eq!(sanitize_transcript_segment("///"), "sem-nome");
+    }
+
+    #[test]
+    fn next_transcript_sequence_starts_at_one_for_an_empty_or_missing_dir() {
+        let dir = transcript_test_dir("empty");
+        assert_eq!(next_transcript_sequence(&dir), 1);
+    }
+
+    #[test]
+    fn next_transcript_sequence_is_the_highest_existing_number_plus_one_never_a_gap_fill() {
+        let dir = transcript_test_dir("sequence");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("01-claude-diagnostico-saida-bruta.txt"), b"x").unwrap();
+        fs::write(dir.join("03-codex-implementacao-saida-bruta.txt"), b"x").unwrap();
+        fs::write(dir.join("nao-numerado.txt"), b"x").unwrap();
+
+        assert_eq!(next_transcript_sequence(&dir), 4);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn transcript_capture_path_follows_the_documented_predictable_format() {
+        let dir = transcript_test_dir("path");
+        let path = transcript_capture_path(dir.to_str().unwrap(), "Claude Code", "Diagnóstico!");
+
+        assert_eq!(
+            path,
+            dir.join("conversas")
+                .join("01-Claude-Code-Diagn-stico-saida-bruta.txt")
+        );
+    }
+
+    #[test]
+    fn transcript_capture_handle_appends_raw_bytes_without_interpreting_them() {
+        let dir = transcript_test_dir("append");
+        let path = dir.join("conversas").join("01-claude-teste-saida-bruta.txt");
+        let handle = TranscriptCaptureHandle::open_with_cap(&path, 1024).unwrap();
+
+        handle.append(b"primeira linha\n");
+        handle.append(b"segunda linha\n");
+        drop(handle); // solta o file handle antes de ler de volta no Windows
+
+        let contents = fs::read_to_string(&path).unwrap();
+        assert_eq!(contents, "primeira linha\nsegunda linha\n");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn transcript_capture_handle_stops_at_the_cap_and_writes_a_single_truncation_notice() {
+        let dir = transcript_test_dir("cap");
+        let path = dir.join("conversas").join("01-claude-teste-saida-bruta.txt");
+        let handle = TranscriptCaptureHandle::open_with_cap(&path, 10).unwrap();
+
+        handle.append(b"0123456789"); // exatamente o teto
+        handle.append(b"isto nunca deveria aparecer no arquivo");
+        handle.append(b"nem isto");
+        drop(handle);
+
+        let contents = fs::read_to_string(&path).unwrap();
+        assert!(contents.starts_with("0123456789"));
+        assert!(contents.contains("captura de transcript truncada"));
+        assert!(!contents.contains("isto nunca deveria aparecer"));
+        // Só UM aviso de truncamento, mesmo com duas chamadas depois do teto.
+        assert_eq!(contents.matches("captura de transcript truncada").count(), 1);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn transcript_capture_cap_is_meaningfully_larger_than_the_scrollback_ring() {
+        // (d) do pedido de manutenção: nunca sem limite -- mas o limite tem
+        // que ser generoso o bastante pra evidência não truncar antes do
+        // scrollback (que já tem 4 MiB e serve só resync de tela).
+        assert!(TRANSCRIPT_CAPTURE_CAP_BYTES > SCROLLBACK_CAP_BYTES as u64);
     }
 }

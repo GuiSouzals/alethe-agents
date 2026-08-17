@@ -74,6 +74,8 @@ export function makeDefaultTerminal(args: {
     automatedSpawn?: boolean
     /** Lord ADR-0013 D2: default restritivo — omitido vira só o próprio tipo. */
     runtimesPermitidos?: AgentType[]
+    /** Lord ADR-0014 D3: ver `SubTab.transcriptCapture`. */
+    transcriptCapture?: { demandaDir: string; agente: string; assunto: string }
   }
   worktreeAgentId?: string
   gsdSyncViewer?: boolean
@@ -112,6 +114,7 @@ export function makeDefaultTerminal(args: {
         // Lord ADR-0013 D2: default restritivo — só o runtime da própria aba.
         // Conjunto vazio explícito (`[]`) é respeitado, nunca substituído.
         runtimesPermitidos: args.firstTab.runtimesPermitidos ?? [args.firstTab.type],
+        transcriptCapture: args.firstTab.transcriptCapture,
       },
     ],
   }

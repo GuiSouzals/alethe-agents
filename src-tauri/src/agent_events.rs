@@ -43,6 +43,11 @@ struct SpawnRequestV1 {
     name: Option<String>,
     // Lord F3: Vínculo opcional e estável para a UI focar pai/filho sem inferência.
     parent_terminal_id: Option<String>,
+    // Lord ADR-0014 D3: pedido explícito de captura automática de transcript
+    // pra a aba que este /spawn cria. Ausente = sem captura -- o chassi nunca
+    // infere sozinho que um despacho "é de uma fatia" (ADR-0003); só grava
+    // quando quem chamou (o orquestrador, que já sabe o slug da demanda) pede.
+    transcript_capture: Option<crate::pty::TranscriptCaptureArgs>,
 }
 
 // Lord D1: O evento interno usa camelCase por ser consumido diretamente pelo TypeScript.
@@ -66,6 +71,8 @@ struct SpawnEventV1 {
     // (ver `ScopeVisibility`); o request seguiu contido só por token + cwd +
     // portão de confirmação humana, nunca bloqueado por isto -- só rotulado.
     scope_note: Option<String>,
+    // Lord ADR-0014 D3: reencaminha o pedido de captura, se veio no corpo.
+    transcript_capture: Option<crate::pty::TranscriptCaptureArgs>,
 }
 
 // Lord D1: Confirmações aceitas do consumidor único do workspace.
@@ -564,6 +571,7 @@ pub fn start_listener(app: AppHandle) {
                         name: payload.name,
                         parent_terminal_id: payload.parent_terminal_id,
                         scope_note: scope_visibility.note_code().map(str::to_string),
+                        transcript_capture: payload.transcript_capture,
                     };
                     eprintln!(
                         "[agent_events] /spawn provider={} request_id={} job_id={}",
@@ -789,6 +797,7 @@ mod tests {
             name: None,
             parent_terminal_id: Some("terminal-1".to_string()),
             scope_note: None,
+            transcript_capture: None,
         };
 
         let json = serde_json::to_string(&event).unwrap();
@@ -809,10 +818,62 @@ mod tests {
             name: None,
             parent_terminal_id: None,
             scope_note: Some("sem_terminal_origem".to_string()),
+            transcript_capture: None,
         };
 
         let json = serde_json::to_string(&event).unwrap();
         assert!(json.contains(r#""scopeNote":"sem_terminal_origem""#));
+    }
+
+    // Lord ADR-0014 D3: o pedido de captura, quando presente no corpo do
+    // /spawn, precisa sobreviver até o evento que a UI/backend consomem --
+    // senão a fatia dispatched não tem como ganhar transcript automático.
+    #[test]
+    fn spawn_event_forwards_the_transcript_capture_request_when_present() {
+        let event = SpawnEventV1 {
+            version: 1,
+            request_id: "request-1".to_string(),
+            job_id: "job-1".to_string(),
+            provider: "codex".to_string(),
+            task: "Implement the slice".to_string(),
+            cwd: None,
+            project_id: None,
+            origin: "lord".to_string(),
+            name: None,
+            parent_terminal_id: Some("terminal-1".to_string()),
+            scope_note: None,
+            transcript_capture: Some(crate::pty::TranscriptCaptureArgs {
+                demanda_dir: "C:/work/project/.lord/demandas/minha-fatia".to_string(),
+                agente: "codex".to_string(),
+                assunto: "implementacao".to_string(),
+            }),
+        };
+
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains(r#""transcriptCapture":{"demandaDir""#));
+        assert!(json.contains(r#""agente":"codex""#));
+        assert!(json.contains(r#""assunto":"implementacao""#));
+    }
+
+    #[test]
+    fn spawn_event_serializes_transcript_capture_as_null_when_absent() {
+        let event = SpawnEventV1 {
+            version: 1,
+            request_id: "request-1".to_string(),
+            job_id: "job-1".to_string(),
+            provider: "codex".to_string(),
+            task: "Implement the slice".to_string(),
+            cwd: None,
+            project_id: None,
+            origin: "lord".to_string(),
+            name: None,
+            parent_terminal_id: None,
+            scope_note: None,
+            transcript_capture: None,
+        };
+
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains(r#""transcriptCapture":null"#));
     }
 
     #[test]

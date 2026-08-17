@@ -47,6 +47,8 @@ export type XTermViewProps = {
   env?: Record<string, string>
   /** Lord ADR-0013 D3 camada 1: runtimes permitidos (D2) desta aba. */
   runtimesPermitidos?: string[]
+  /** Lord ADR-0014 D3: pedido de captura automática de transcript desta aba. */
+  transcriptCapture?: { demandaDir: string; agente: string; assunto: string }
   /** RFC-004 — raiz do repo quando o projeto tem Graphify habilitado. Presente:
    * o spawn injeta o MCP do grafo (Claude via `--mcp-config`, Codex/OpenCode via
    * merge no config do projeto) e garante o bootstrap do grafo. */
@@ -97,6 +99,7 @@ export function XTermView({
   sessionKey,
   env,
   runtimesPermitidos,
+  transcriptCapture,
   graphifyRepo,
   gsdWatcherEnabled,
   trustSessionId,
@@ -330,6 +333,7 @@ export function XTermView({
     sessionId,
     env,
     runtimesPermitidos,
+    transcriptCapture,
     graphifyRepo,
     gsdWatcherEnabled,
     trustSessionId,

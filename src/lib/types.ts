@@ -156,6 +156,16 @@ export type SubTab = {
    * — mesmo portão de confirmação do provider pago, segunda porta de entrada.
    */
   automatedSpawn?: boolean
+  /**
+   * Lord ADR-0014 D3: pedido de captura automática de transcript pra esta
+   * aba, quando ela nasceu de uma fatia despachada (`/spawn` externo com o
+   * campo presente no corpo). Ausente = sem captura — o chassi nunca infere
+   * sozinho que uma aba "é de uma fatia" (seria julgamento, ADR-0003); só
+   * grava quando o despacho pediu explicitamente. Consumido no spawn
+   * inicial (`useXtermSession`); não sobrevive a um `restartPty` (gap
+   * declarado, ver LORD-CHASSI.md).
+   */
+  transcriptCapture?: { demandaDir: string; agente: string; assunto: string }
 }
 
 export type AgentRuntimeProfile = 'full' | 'lean' | 'diagnostic'

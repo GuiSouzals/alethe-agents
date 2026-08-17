@@ -101,6 +101,21 @@ describe('resolveSpawnTarget', () => {
     if (decision.status !== 'matched') throw new Error('fixture must match')
     expect(decision.scopeNote).toBeUndefined()
   })
+
+  // Lord ADR-0014 D3: o pedido de captura de transcript, quando o /spawn o
+  // inclui, precisa sobreviver à resolução pura até chegar na aba criada.
+  it('propagates transcriptCapture through to a matched decision', () => {
+    const capture = { demandaDir: 'C:\\work\\.lord\\demandas\\minha-fatia', agente: 'codex', assunto: 'implementacao' }
+    expect(
+      resolveSpawnTarget(payload({ transcriptCapture: capture }), projects, true),
+    ).toMatchObject({ status: 'matched', transcriptCapture: capture })
+  })
+
+  it('leaves transcriptCapture undefined when the dispatch did not request it', () => {
+    const decision = resolveSpawnTarget(payload(), projects, true)
+    if (decision.status !== 'matched') throw new Error('fixture must match')
+    expect(decision.transcriptCapture).toBeUndefined()
+  })
 })
 
 describe('executeAgentSpawn', () => {
@@ -165,6 +180,17 @@ describe('executeAgentSpawn', () => {
       orchestrationJobId: 'spawn-job-1',
       orchestrationParentTerminalId: 'parent-1',
     })
+  })
+
+  // Lord ADR-0014 D3: o pedido de captura precisa chegar no firstTab que
+  // createAgentTerminal usa pra criar a aba -- senão o spawn nunca aciona
+  // a gravação de transcript no chassi (`SpawnPtyArgs.transcriptCapture`).
+  it('carries transcriptCapture onto the tab created for a dispatched slice', () => {
+    const capture = { demandaDir: 'C:\\work\\.lord\\demandas\\minha-fatia', agente: 'codex', assunto: 'implementacao' }
+    const decision = resolveSpawnTarget(payload({ transcriptCapture: capture }), projects, true)
+    if (decision.status !== 'matched') throw new Error('fixture must match')
+
+    expect(buildSpawnTerminalArgs(decision).firstTab.transcriptCapture).toEqual(capture)
   })
 
   // Lord F1: o provider `cursor` precisa atravessar a allowlist do frontend até o tipo da aba.

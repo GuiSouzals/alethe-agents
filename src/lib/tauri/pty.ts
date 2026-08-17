@@ -20,6 +20,23 @@ export type SpawnPtyArgs = {
    * verdade é server-side em `/spawn` (D3 camada 2).
    */
   runtimesPermitidos?: string[]
+  /**
+   * Lord ADR-0014 D3: pede ao chassi pra gravar automaticamente a saída
+   * bruta desta sessão em `<demandaDir>/conversas/NN-<agente>-<assunto>-
+   * saida-bruta.txt` (numeração e sanitização mecânicas, feitas pelo
+   * backend — ver `pty.rs::TranscriptCaptureHandle`). Ausente = sem
+   * captura. Só o spawn inicial aceita este campo; `restartPty` não retoma
+   * a captura nesta rodada (gap declarado, ver LORD-CHASSI.md).
+   */
+  transcriptCapture?: TranscriptCaptureArgs
+}
+
+/** Lord ADR-0014 D3: ver `SpawnPtyArgs.transcriptCapture`. */
+export type TranscriptCaptureArgs = {
+  /** Caminho absoluto de `.lord/demandas/<slug>/` (sem o `conversas/` final). */
+  demandaDir: string
+  agente: string
+  assunto: string
 }
 
 export async function spawnPty(args: SpawnPtyArgs): Promise<{ id: string }> {
@@ -33,6 +50,7 @@ export async function spawnPty(args: SpawnPtyArgs): Promise<{ id: string }> {
     launcherOverride: args.launcherOverride,
     env: args.env,
     runtimesPermitidos: args.runtimesPermitidos,
+    transcriptCapture: args.transcriptCapture,
   })
 }
 
